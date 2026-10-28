@@ -1,7 +1,0 @@
-[package]
-name = "cross_backend_kat"
-type = "bin"
-authors = ["zk-ePrescription"]
-
-[dependencies]
-common = { path = "../common" }

@@ -7,8 +7,8 @@ pragma circom 2.1.6;
 include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/bitify.circom";
 include "poseidon2.circom";
-include "06_schnorr_bjj.circom";
-include "05_doctor_registry_merkle_lib.circom";
+include "schnorr_bjj.circom";
+include "registry.circom";
 
 // C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold)
 template Commitment() {

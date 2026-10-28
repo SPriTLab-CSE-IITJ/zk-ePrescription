@@ -11,3 +11,6 @@ target/
 *.sym
 *.wtns
 *.log
+
+# run output
+results/

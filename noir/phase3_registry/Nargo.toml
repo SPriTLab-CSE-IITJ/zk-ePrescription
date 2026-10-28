@@ -1,6 +1,0 @@
-[package]
-name = "phase3_registry"
-type = "bin"
-authors = [""]
-
-[dependencies]

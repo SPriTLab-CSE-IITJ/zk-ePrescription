@@ -1,0 +1,13 @@
+# Derived MEASUREMENT environment for the final benchmark.
+#
+# Used ONLY if the frozen image lacks GNU time (/usr/bin/time). It adds the
+# Debian `time` package and nothing else: no source, toolchain or dependency of
+# the benchmarked implementation is changed. run_benchmark.sh verifies after
+# building that /workspace in this image is byte-identical to the frozen image
+# manifest and that circom/snarkjs/nargo/bb/node versions are unchanged.
+ARG BASE=zkep:aligned
+FROM ${BASE}
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends time \
+    && rm -rf /var/lib/apt/lists/*
+LABEL org.zkep.purpose="benchmark measurement env: base + GNU time only"

@@ -1,7 +1,0 @@
-[package]
-name = "patient_binding_issuance"
-type = "bin"
-authors = ["zk-ePrescription"]
-
-[dependencies]
-common = { path = "../common" }

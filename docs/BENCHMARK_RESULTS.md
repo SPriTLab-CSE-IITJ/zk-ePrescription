@@ -16,6 +16,13 @@ frozen aligned implementation using canonical fixture TV-001
 (result directory `laptop-x86_64-wsl2_20261004T083403Z`; 46/46 validation
 checks passed).
 
+The run used harness v1.3 before the repository was restructured, when the
+circuit files were named `circom/circuits/08_eprescription_main.circom` and
+`noir/phase4_orchestrator`. The compiled circuits are identical to today's
+`redemption.circom` and `noir/redemption`: same R1CS
+(`26cbeef7…0b56d1b`), same witness WASM and same ACIR bytecode. To reproduce,
+see `bench/README.md` (harness v1.4, same measured commands).
+
 | Metric | Circom / Groth16 | Noir / UltraHonk |
 |---|---:|---:|
 | Structural size | 12,291 R1CS constraints | 16,681 ACIR opcodes / 22,182 BB gates |

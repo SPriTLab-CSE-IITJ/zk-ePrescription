@@ -1,8 +1,14 @@
+# Base images pinned by digest (as verified on 2026-10-28). If a digest is not
+# available for your architecture, override it, e.g.
+#   docker build --build-arg NODE_IMAGE=node:18.20-bookworm --build-arg RUST_IMAGE=rust:1.96-bookworm -t zkep .
+ARG RUST_IMAGE=rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
+ARG NODE_IMAGE=node:18.20-bookworm@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783
+
 # =========================================================
 # Stage 1: Build Circom 2.2.3
 # =========================================================
 
-FROM rust:1.96-bookworm AS circom-builder
+FROM ${RUST_IMAGE} AS circom-builder
 
 ENV PATH="/usr/local/cargo/bin:${PATH}"
 
@@ -34,7 +40,7 @@ RUN circom --version
 # Stage 2: zk-ePrescription research environment
 # =========================================================
 
-FROM node:18.20-bookworm
+FROM ${NODE_IMAGE}
 
 ARG CIRCOM_VERSION=2.2.3
 ARG SNARKJS_VERSION=0.7.6
@@ -58,6 +64,7 @@ RUN apt-get update \
         git \
         ca-certificates \
         jq \
+        time \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
@@ -93,6 +100,22 @@ RUN curl -L \
     && bb --version
 
 # ---------------------------------------------------------
+# Pin the downloaded prover binaries (x86-64): the build stops if noirup/bbup
+# deliver anything other than the binaries verified on 2026-10-28. On other
+# architectures (Raspberry Pi, Jetson) the hashes are printed for the record.
+# ---------------------------------------------------------
+
+ARG NARGO_SHA256_AMD64=247b1d71a01993f2f4102ba92b3da84f5ff2cbafdde0de989c7aa3c6c9600c1a
+ARG BB_SHA256_AMD64=031556ee54dc65b3fffb6388a267460c02f988dd4420721b381067d0151b4942
+
+RUN echo "tool binaries ($(uname -m)):" \
+    && sha256sum "$(command -v circom)" "$(command -v nargo)" "$(command -v bb)" \
+    && if [ "$(uname -m)" = "x86_64" ]; then \
+         echo "${NARGO_SHA256_AMD64}  $(command -v nargo)" | sha256sum -c - \
+         && echo "${BB_SHA256_AMD64}  $(command -v bb)" | sha256sum -c - ; \
+       fi
+
+# ---------------------------------------------------------
 # Verify toolchain
 # ---------------------------------------------------------
 
@@ -123,7 +146,15 @@ RUN cd circom && npm ci
 COPY . .
 
 # ---------------------------------------------------------
-# Canonical regression entry point
+# Barretenberg CRS: downloaded once here (with retries) so that
+# `docker run` needs no network access
 # ---------------------------------------------------------
 
-CMD ["npm", "test"]
+RUN bash scripts/prime_crs.sh
+
+# ---------------------------------------------------------
+# Entry point: demo | test | kat | help (scripts/run.sh)
+# ---------------------------------------------------------
+
+ENTRYPOINT ["bash", "/workspace/scripts/run.sh"]
+CMD ["test"]

@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "./scripts/test_all.sh"
+    "test": "./scripts/run.sh test"
   },
   "keywords": [],
   "author": "",

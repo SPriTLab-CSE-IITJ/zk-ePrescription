@@ -1,8 +1,10 @@
 # Regression Test Results
 
-Summary of the successful full regression (`docker run --rm <image>` →
-`npm test` → `scripts/test_all.sh`) on the frozen aligned implementation.
-Final line of the run: `ALL REGRESSION TESTS PASSED`.
+Summary of the successful full regression of the aligned implementation
+(`docker run --rm zkep test`, which runs `scripts/test.sh`). Final line of the
+run: `RESULT: ALL REGRESSION TESTS PASSED`. The circuits are byte-identical to
+the ones benchmarked (same R1CS and ACIR bytecode); only file and package names
+changed in the restructured layout.
 
 | Suite | Result |
 |---|---:|
@@ -43,13 +45,24 @@ Each negative vector is a single attempt that must fail. A test passes only if
 witness generation (Circom) or execution (Noir) is rejected by a circuit
 constraint, not by a tool or input error.
 
-## Reading the raw logs
+## Reading the output
 
-Lines such as `PASS: NT-001 rejected by circuit (Error in template SchnorrBJJ_46)`
-report **where** the expected constraint failure occurred (here: inside the
-Schnorr verifier). The template name and its numeric suffix are Circom's
-internal location identifiers. They are not errors in the test run and do not
-indicate repeated executions. The Noir suite reports the equivalent location as
-a source line, e.g. `src/main.nr:121`.
+The screen shows one line per check; the full output of every tool is in
+`results/logs/` (`circom.log`, `noir.log`, `kat.log`).
 
-The raw logs are kept unchanged for audit and debugging.
+The attack table names the check that rejected each vector in each backend:
+
+| Name in the table | Circom location | Noir location |
+|---|---|---|
+| signature | `SchnorrBJJ`, signature equation | `src/main.nr:121` |
+| s < l bound | `SchnorrBJJ`, scalar bound | `src/schnorr.nr:21` |
+| registry | `DoctorRegistry`, root mismatch | `src/main.nr:120` |
+| binary direction | `DoctorRegistry`, direction bit | `src/registry.nr:7` |
+| expiry / slot < threshold | `EPrescriptionMain`, policy checks | `src/main.nr:119` / `:118` |
+| point on curve / PK on curve / R on curve | `BabyCheck` | `src/schnorr.nr:19` / `:20` |
+
+The two backends can name different checks for the same vector when it breaks
+more than one condition. NT-018 (off-curve public key) is an example: Circom
+evaluates the registry leaf first and fails there, Noir checks the curve
+first. Both reject it; the isolated Schnorr vector `SIG-OFFCURVE-PK` exercises
+the Circom curve check directly.

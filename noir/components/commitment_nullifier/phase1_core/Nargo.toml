@@ -1,6 +1,0 @@
-[package]
-name = "phase1_core"
-type = "bin"
-authors = [""]
-
-[dependencies]

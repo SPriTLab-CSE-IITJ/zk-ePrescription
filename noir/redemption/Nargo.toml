@@ -1,0 +1,7 @@
+[package]
+name = "redemption"
+type = "bin"
+authors = ["Satyam"]
+
+[dependencies]
+common = { path = "../common" }

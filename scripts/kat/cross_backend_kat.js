@@ -2,7 +2,7 @@
 //
 //   node scripts/kat/cross_backend_kat.js prepare <workdir>
 //       -> writes <workdir>/<set>.circom.json and
-//          noir/cross_backend_kat/KAT_<set>.toml for every KAT set
+//          noir/kat/KAT_<set>.toml for every KAT set
 //   node scripts/kat/cross_backend_kat.js compare <workdir>
 //       -> reads <workdir>/<set>.circom.wtns.json and <workdir>/<set>.noir.out,
 //          compares JS reference, Circom witness and Noir execution, writes
@@ -118,7 +118,7 @@ function prepare(work) {
     const sets = kanSets();
     for (const [name, s] of Object.entries(sets)) {
         fs.writeFileSync(path.join(work, `${name}.circom.json`), JSON.stringify(toCircom(s), null, 2));
-        fs.writeFileSync(path.join(REPO, `noir/cross_backend_kat/KAT_${name}.toml`), toToml(s));
+        fs.writeFileSync(path.join(REPO, `noir/kat/KAT_${name}.toml`), toToml(s));
     }
     fs.writeFileSync(path.join(work, "sets.txt"), Object.keys(sets).join("\n") + "\n");
 }
@@ -178,7 +178,7 @@ function compare(work) {
     }
     results.registry_generator = regRows;
 
-    // Issuance-side patient binding circuits (Circom 09 vs Noir patient_binding_issuance)
+    // Issuance-side patient binding circuits (Circom issuance_binding vs Noir issuance_binding)
     {
         const w = require(path.resolve(work, "patient_binding.circom.wtns.json"));
         // Circom outputs: [patient_binding (I), patient_prescription_binding (PB)]
