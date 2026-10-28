@@ -1,26 +1,28 @@
-# Noir Toolchain
+# Toolchain
 
-This document records the toolchain used by the current Noir implementation of zk-ePrescription.
+All versions are pinned in the repository `Dockerfile`; the Docker image is the
+reference environment for every regression run.
 
-## Versions
+| Tool | Version |
+|---|---|
+| Circom | 2.2.3 (built from source, tag `v2.2.3`) |
+| snarkjs | 0.7.6 |
+| circomlib / circomlibjs | as locked in `package-lock.json` / `circom/package-lock.json` |
+| Node.js | 18.20 (base image `node:18.20-bookworm`) |
+| Noir / Nargo | 1.0.0-beta.24 |
+| Barretenberg (`bb`) | 5.0.0-nightly.20260522 |
 
-- Noir / Nargo: `1.0.0-beta.24`
-- noirc: `1.0.0-beta.24`
-- Barretenberg / bb: `5.0.0-nightly.20260522`
+## Proving stacks
 
-## Circuit and Proving Stack
+* Circom → R1CS → Groth16 (snarkjs), BN254.
+* Noir → ACIR → UltraHonk (Barretenberg), BN254.
 
-- Circuit language: Noir
-- Proving system: UltraHonk
-- Proving backend: Barretenberg
-- Intermediate representation: ACIR
+## Regression entry point
 
-## Validation Workflow
+```bash
+docker build -t zkep:aligned .
+docker run --rm zkep:aligned        # npm test -> scripts/test_all.sh
+```
 
-The current Phase 4 regression suites use:
-
-```text
-nargo compile
-nargo execute
-bb prove
-bb verify
+Barretenberg downloads its CRS on first use; the Docker run therefore needs
+network access to the Aztec CRS host.

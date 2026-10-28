@@ -50,6 +50,9 @@ patient through the patient application.
 The patient can therefore track prescription redemption events without
 requiring the patient to be physically present at the pharmacy.
 
+*Status:* redemption recording and patient notification are application-layer
+services; they are not implemented in this research artifact.
+
 ## Security Boundary
 
 Authentication of the HealthID occurs during registration. The ZK circuit

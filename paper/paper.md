@@ -1,3 +1,12 @@
+> **SUPERSEDED DRAFT — DO NOT CITE.**
+> This draft predates the protocol alignment of the Circom/Groth16 and
+> Noir/UltraHonk implementations. Its protocol description, security
+> discussion and all performance numbers (including the PLONK/"UltraPLONK"
+> table, whose UltraPLONK column was projected rather than measured) refer to an
+> obsolete circuit revision. The normative protocol is
+> `docs/protocol_specification.md`; a rewrite based on the aligned
+> implementation and its measured benchmarks is in progress.
+
 # Privacy-Preserving National-Health-ID-Linked E-Prescription Redemption Using UltraPLONK
 
 **Abstract**  

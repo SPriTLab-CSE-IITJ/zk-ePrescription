@@ -1,5 +1,13 @@
 pragma circom 2.1.6;
 
+// Issuance-side patient-prescription binding
+// (docs/protocol_specification.md, Sections 7-8):
+//
+//   I  = H2(patient_secret)
+//   PB = H6(I, C)
+//
+// Not part of the Phase-4 redemption statement.
+
 include "lib_modules.circom";
 
 template PatientBindingIssuance() {
@@ -9,37 +17,14 @@ template PatientBindingIssuance() {
     signal output patient_binding;
     signal output patient_prescription_binding;
 
-    // Patient binding:
-    //
-    // B_P = Poseidon(patient_secret)
-    //
-    // This follows the existing Circom identity-binding construction.
-
     component identity = IdentityBinding();
-
     identity.patient_secret <== patient_secret;
-
     patient_binding <== identity.identity_ref;
 
-    // Patient-prescription binding:
-    //
-    // PB = Poseidon(
-    //     DOMAIN_PATIENT_BINDING,
-    //     B_P,
-    //     C
-    // )
-    //
-    // DOMAIN_PATIENT_BINDING = 6
-    //
-    // The existing prescription commitment C remains unchanged.
-
-    component binding_hash = Poseidon(3);
-
-    binding_hash.inputs[0] <== 6;
-    binding_hash.inputs[1] <== patient_binding;
-    binding_hash.inputs[2] <== commitment;
-
-    patient_prescription_binding <== binding_hash.out;
+    component pb = H6PatientBinding();
+    pb.identity <== identity.identity_ref;
+    pb.commitment <== commitment;
+    patient_prescription_binding <== pb.out;
 }
 
 component main = PatientBindingIssuance();

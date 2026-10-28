@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Noir negative suite for the integrated Phase-4 circuit.
+# Every vector in tests/negative/ must be rejected by a circuit assertion
+# ("Failed constraint") during nargo execute.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,33 +21,33 @@ echo "==============================================="
 
 for VECTOR in "$PKG_ROOT/tests/negative"/*.toml
 do
-    NAME="$(basename "$VECTOR")"
+    NAME="$(basename "$VECTOR" .toml)"
 
     echo
-    echo ">>> $NAME"
+    echo ">>> $NAME: $(head -1 "$VECTOR" | sed 's/^# [A-Z0-9-]*: //')"
 
-    grep -v '^return[[:space:]]*=' "$VECTOR" > "$PKG_ROOT/Prover.toml"
+    cp "$VECTOR" "$PKG_ROOT/_vector.toml"
 
     LOG_FILE="$(mktemp)"
 
     if (
         cd "$PKG_ROOT"
-        nargo execute >"$LOG_FILE" 2>&1
+        nargo execute --prover-name _vector >"$LOG_FILE" 2>&1
     ); then
         echo "FAIL (unexpectedly succeeded)"
         cat "$LOG_FILE"
-        rm -f "$LOG_FILE"
+        rm -f "$LOG_FILE" "$PKG_ROOT/_vector.toml"
         exit 1
     elif grep -q "Failed constraint" "$LOG_FILE"; then
-        echo "PASS (expected constraint failure)"
+        echo "PASS (expected constraint failure at $(grep -m1 -oE 'src/[a-z_]+\.nr:[0-9]+' "$LOG_FILE"))"
     else
         echo "FAIL (execution, parsing, or toolchain error)"
         cat "$LOG_FILE"
-        rm -f "$LOG_FILE"
+        rm -f "$LOG_FILE" "$PKG_ROOT/_vector.toml"
         exit 1
     fi
 
-    rm -f "$LOG_FILE"
+    rm -f "$LOG_FILE" "$PKG_ROOT/_vector.toml"
 done
 
 echo

@@ -4,12 +4,19 @@ mod registry;
 mod schnorr;
 mod outputs;
 mod bjj_core;
+mod fixture_tests;
 
 use commitment::compute_commitment;
 use policy::evaluate_policy;
 use registry::verify_registry;
 use schnorr::verify_signature;
 use outputs::finalize_outputs;
+
+// Merkle depth of the canonical experimental registry fixture
+// (4 doctors -> depth 2; docs/protocol_specification.md Section 11.1).
+// The registry verifier itself is generic over DEPTH; this constant is a
+// fixture parameter, not a protocol constant.
+global REGISTRY_DEPTH: u32 = 2;
 
 fn main(
     registry_root: pub Field,
@@ -24,13 +31,13 @@ fn main(
 
     quantity_threshold: u64,
     expiry_date: u64,
-    current_date: u64,
+    current_date: pub u64,
 
     patient_secret: Field,
     slot_index: u64,
 
-    path_elements: [Field; 4],
-    path_indices: [Field; 4],
+    path_elements: [Field; REGISTRY_DEPTH],
+    path_indices: [Field; REGISTRY_DEPTH],
 
     signature_nonce_x: Field,
     signature_nonce_y: Field,
@@ -45,6 +52,8 @@ fn main(
         prescription_id,
         doctor_id,
         medicine_code,
+        expiry_date,
+        quantity_threshold,
     );
 
     // ==========================================================
@@ -68,7 +77,7 @@ fn main(
     // Registry verification
     // ==========================================================
 
-    let registry_valid = verify_registry::<4>(
+    let registry_valid = verify_registry::<REGISTRY_DEPTH>(
         registry_root,
         doctor_id,
         doctor_pubkey_x,
