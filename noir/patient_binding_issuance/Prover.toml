@@ -1,8 +1,0 @@
-# Synthetic patient registration fixture.
-# patient_secret represents the private secret established during
-# authenticated identity registration.
-
-patient_secret = "0"
-
-# Existing validated Phase 4 prescription commitment.
-commitment = "0x162be49e0c144324bf7421ff597d7cfe64ff68726e8bfb55d1b90844038260f1"

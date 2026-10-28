@@ -4,3 +4,13 @@ build/
 *.ptau
 *.wasm
 target/
+
+# Generated proving / build artifacts
+**/target/
+*.r1cs
+*.sym
+*.wtns
+*.log
+
+# run output
+results/

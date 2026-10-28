@@ -1,0 +1,7 @@
+[package]
+name = "kat"
+type = "bin"
+authors = ["zk-ePrescription"]
+
+[dependencies]
+common = { path = "../common" }

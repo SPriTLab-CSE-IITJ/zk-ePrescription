@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "./scripts/test_e2e.sh"
+    "test": "../scripts/circom_suite.sh"
   },
   "keywords": [],
   "author": "",

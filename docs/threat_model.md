@@ -13,6 +13,16 @@ unnecessary disclosure during pharmacy redemption.
 The protocol is a research prototype and does not implement the external
 national-health-identity infrastructure itself.
 
+**Implementation status.** This document states intended properties and their
+assumptions; it is not a formal security proof. Within this artifact the ZK
+circuits enforce prescription integrity, registry membership, signature
+validity, the policy checks and correct nullifier derivation
+(`docs/protocol_specification.md`, Section 16). The nullifier store (replay
+rejection), patient notification / redemption accountability and the
+national-health-identity enrolment are external services that are **not**
+implemented here. No claim of anonymity, universal unlinkability or collusion
+resistance is made.
+
 ---
 
 ## 2. Participants

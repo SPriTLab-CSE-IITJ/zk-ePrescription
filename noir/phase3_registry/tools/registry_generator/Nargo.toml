@@ -1,6 +1,0 @@
-[package]
-name = "registry_generator"
-type = "bin"
-authors = ["Satyam"]
-
-[dependencies]

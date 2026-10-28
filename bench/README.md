@@ -1,0 +1,25 @@
+# Benchmark harness (v1.4)
+
+Measures both backends on the canonical vector TV-001 inside the repository's
+Docker image: compile, witness generation, proving, verification, peak memory
+(GNU `time -v`), proof and key sizes, and the one-time setup stages.
+
+```bash
+docker build -t zkep .
+bash bench/run_benchmark.sh <platform-label> --plan   # checks + dry run, measures nothing
+bash bench/run_benchmark.sh <platform-label>          # 1 warm-up + 5 runs (compile: 3)
+node bench/print_summary.js results/bench/<platform-label>_<UTC>
+```
+
+- Output goes to `results/bench/<label>_<UTC>/` (gitignored): raw runs,
+  medians, metadata, artifact hashes and `validation.json`.
+- Preflight stops unless the image's `/workspace` is byte-identical to this
+  checkout and the checkout is a clean git tree (`ALLOW_DIRTY=1` for test runs).
+- The run is accepted only if every validation check passes, including:
+  every proof verified, public outputs equal to the fixture, and the expected
+  circuit sizes (12,291 R1CS constraints; 16,681 ACIR opcodes; 22,182 gates).
+
+Version history: v1.3 produced the published laptop results (run
+`laptop-x86_64-wsl2_20261004T083403Z`). v1.4 changes only circuit and package
+names for the restructured layout, and checks against this checkout instead of
+external frozen manifests. The measured commands are unchanged.
