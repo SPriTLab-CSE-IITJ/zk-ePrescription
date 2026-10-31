@@ -71,7 +71,7 @@ node circom/scripts/lib/gen_poseidon2_constants_circom.js > circom/circuits/pose
 | `scripts/noir_suite.sh` | Library and Schnorr tests, compile, TV execution and outputs, `bb` prove and verify, tampered public inputs, NT rejections, issuance binding |
 | `scripts/kat/run_cross_backend_kat.sh` | JS reference vs Circom vs Noir for 6 input sets, the registry generator and the issuance circuits |
 | `scripts/demo.sh` | TV-001 end to end in both backends, one attack, one replay |
-| `bench/run_benchmark.sh` | Benchmark harness v1.4.1 (host side) |
+| `bench/run_benchmark.sh` | Benchmark harness v1.4.2 (host side) |
 
 ## History
 

@@ -162,7 +162,7 @@ noir/common/         Poseidon2 sponge and H1-H6 (the only Poseidon2 source in No
 noir/redemption/     redemption circuit (entry), tests/positive, tests/negative
 noir/issuance_binding/, noir/kat/, noir/registry_generator/
 scripts/             run.sh (container entry point), test.sh, demo.sh, suites, kat/
-bench/               benchmark harness v1.4.1
+bench/               benchmark harness v1.4.2
 docs/                specification, threat model, architecture, toolchain, results
 testdata/kat/        canonical fixture and KAT reference vectors
 testdata/historical/ pre-alignment vectors, kept for provenance only

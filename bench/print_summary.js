@@ -52,7 +52,12 @@ console.log(` Result dir : ${path.basename(dir)}`);
 console.log(` Validation : ${val.all_pass ? "ALL " + val.checks.length + " CHECKS PASSED" : "FAILED"}`);
 console.log(` Input      : TV-001 (canonical fixture; same logical statement for both backends)`);
 console.log(` Platform   : ${H.cpu_model} | ${H.logical_cpus} logical CPUs | ${H.architecture}`);
-console.log(`              host RAM ${typeof H.windows_host_physical_ram_bytes === "number" ? (H.windows_host_physical_ram_bytes / 2 ** 30).toFixed(2) + " GiB" : "n/a"}, WSL/Docker-visible ${gib(H.linux_visible_memtotal_kb)} | ${H.os_release} | Docker ${D.server_version}`);
+const hostRam = typeof H.windows_host_physical_ram_bytes === "number" ? H.windows_host_physical_ram_bytes
+    : typeof H.macos_host_physical_ram_bytes === "number" ? H.macos_host_physical_ram_bytes : null;
+const visible = H.linux_visible_memtotal_kb ? gib(H.linux_visible_memtotal_kb)
+    : D.docker_visible_memtotal_bytes ? (D.docker_visible_memtotal_bytes / 2 ** 30).toFixed(2) + " GiB" : "n/a";
+console.log(`              host RAM ${hostRam ? (hostRam / 2 ** 30).toFixed(2) + " GiB" : "n/a"}, ${H.linux_visible_memtotal_kb ? "WSL/Docker" : "Docker"}-visible ${visible} | ${H.os_release} | Docker ${D.server_version}`);
+if (typeof H.macos_host_physical_ram_bytes === "number") console.log(`              ${H.device_model} | ${H.macos_host_cores} cores | Docker VM ${D.docker_visible_ncpu} CPUs | power ${H.macos_host_power} | low power mode ${H.macos_host_lowpowermode}`);
 console.log(` Toolchain  : ${T.circom} | ${T.snarkjs} | ${(T.nargo || "").split(" noirc")[0]} | bb ${T.bb} | node ${T.node}`);
 
 box("1. CIRCUIT SIZE  (backend-native units — NOT directly comparable)",
