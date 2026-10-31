@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-# zk-ePrescription — benchmark driver (host side), harness v1.4.
+# zk-ePrescription — benchmark driver (host side), harness v1.4.2.
+#
+# v1.4.2: also runs on a macOS host (Apple silicon, Docker Desktop): host
+# metadata from sysctl/sw_vers/pmset, sha256 via shasum when sha256sum is
+# absent. The measured commands are unchanged.
+#
+# v1.4.1: output folder handed back to the calling user after each container
+# stage (no sudo on native Linux); SOURCE_COMMIT for ZIP downloads. The
+# measured commands are unchanged.
 #
 # v1.4 = v1.3 (used for the published laptop results, run 083403Z) adapted to
 # the restructured repository: circuit and package names, and preflight checks
@@ -24,6 +32,10 @@
 #
 # The harness never modifies the repository. Output (gitignored):
 #   results/bench/<label>_<UTC>[_plan]/   (override with BENCH_OUT=<dir>)
+#
+# Source downloaded as a ZIP instead of cloned: set SOURCE_COMMIT=<full sha> to
+# record the commit the ZIP was taken from; it is stored as "declared", and the
+# source manifest in host_env/ is the evidence that the files match it.
 set -euo pipefail
 
 LABEL="${1:?usage: run_benchmark.sh <platform-label> [--plan]}"
@@ -43,6 +55,9 @@ OUT="${BENCH_OUT:-$REPO/results/bench}/${LABEL}_${TS}"; [ "$MODE" = "--plan" ] &
 HARNESS_FILES="run_benchmark.sh bench_in_container.sh summarize.js validate_outputs.js print_summary.js Dockerfile.bench source_manifest.js"
 
 stop() { echo "STOP: $*" | tee -a "$OUT/STOP.txt" >&2; exit 1; }
+# sha256sum is GNU coreutils; macOS ships shasum (same output format).
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+HOST_OS="$(uname -s)"
 mkdir -p "$OUT/host_env"
 [ -f "$REPO/docs/protocol_specification.md" ] || stop "run from the repository folder"
 echo "== zk-ePrescription benchmark ($MODE) label=$LABEL"
@@ -61,6 +76,9 @@ repo_manifest() {
 
 # ---------------------------------------------------------------- preflight
 COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "not a git checkout")
+if [ "$COMMIT" = "not a git checkout" ] && [ -n "${SOURCE_COMMIT:-}" ]; then
+    COMMIT="declared $SOURCE_COMMIT (not a git checkout)"
+fi
 if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no 2>/dev/null)" ] && [ "${ALLOW_DIRTY:-0}" != "1" ]; then
     stop "uncommitted changes in the repository (commit them, or set ALLOW_DIRTY=1 for a test run)"
 fi
@@ -80,9 +98,9 @@ cmp -s "$OUT/host_env/image_workspace_manifest.sha256" "$OUT/host_env/source_man
     || { diff "$OUT/host_env/source_manifest_before.sha256" "$OUT/host_env/image_workspace_manifest.sha256" | head -20; stop "image /workspace differs from this checkout (rebuild the image)"; }
 pass "image $IMG_ID /workspace == this checkout ($(grep -c . "$OUT/host_env/image_workspace_manifest.sha256") files; arch $IMG_ARCH)"
 
-EXP_JSON=$(sha256sum "$REPO/circom/inputs/eprescription/canonical/TV-001.json" | cut -d' ' -f1)
-EXP_TOML=$(sha256sum "$REPO/noir/redemption/tests/positive/TV-001.toml" | cut -d' ' -f1)
-EXP_FX=$(sha256sum "$REPO/testdata/kat/canonical_fixture.json" | cut -d' ' -f1)
+EXP_JSON=$(sha256 "$REPO/circom/inputs/eprescription/canonical/TV-001.json" | cut -d' ' -f1)
+EXP_TOML=$(sha256 "$REPO/noir/redemption/tests/positive/TV-001.toml" | cut -d' ' -f1)
+EXP_FX=$(sha256 "$REPO/testdata/kat/canonical_fixture.json" | cut -d' ' -f1)
 pass "TV-001.json sha256 $EXP_JSON"
 pass "TV-001.toml sha256 $EXP_TOML"
 pass "canonical_fixture.json sha256 $EXP_FX"
@@ -117,12 +135,30 @@ echo "base_image_id=$IMG_ID base_image_created=$IMG_CREATED base_image_arch=$IMG
     > "$OUT/host_env/images.txt"
 
 # ---------------------------------------------------------------- host metadata (measured only)
-{ date -u +%Y-%m-%dT%H:%M:%SZ; uname -a; cat /etc/os-release 2>/dev/null || true; } > "$OUT/host_env/os.txt"
 hostname > "$OUT/host_env/hostname.txt" 2>/dev/null || echo unavailable > "$OUT/host_env/hostname.txt"
-lscpu > "$OUT/host_env/lscpu.txt" 2>&1 || echo "unavailable" > "$OUT/host_env/lscpu.txt"
-nproc > "$OUT/host_env/nproc.txt"
-cat /proc/meminfo > "$OUT/host_env/meminfo.txt"
-if [ -r /proc/device-tree/model ]; then tr -d '\0' < /proc/device-tree/model > "$OUT/host_env/device_model.txt"; else echo "unavailable" > "$OUT/host_env/device_model.txt"; fi
+if [ "$HOST_OS" = "Darwin" ]; then
+    # macOS host: the containers run in Docker Desktop's Linux VM; the VM's
+    # CPUs and memory are recorded from `docker info` below.
+    { date -u +%Y-%m-%dT%H:%M:%SZ; uname -a; echo "PRETTY_NAME=\"macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))\""; } > "$OUT/host_env/os.txt"
+    { echo "Architecture: $(uname -m)"; echo "Model name: $(sysctl -n machdep.cpu.brand_string)"; } > "$OUT/host_env/lscpu.txt"
+    sysctl -n hw.ncpu > "$OUT/host_env/nproc.txt"
+    echo "unavailable (macOS host; see docker_info.txt for the Docker VM)" > "$OUT/host_env/meminfo.txt"
+    sysctl -n hw.model > "$OUT/host_env/device_model.txt"
+    { sysctl -n hw.memsize
+      sysctl -n machdep.cpu.brand_string
+      echo "macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
+      echo "cores: $(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || echo ?) performance + $(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null || echo ?) efficiency"
+      echo "power: $(pmset -g batt 2>/dev/null | head -1 | tr -d '\r')"
+      echo "lowpowermode: $(pmset -g 2>/dev/null | awk '/lowpowermode/ {print $2}')"
+    } > "$OUT/host_env/mac_host.txt" 2>/dev/null || echo "unavailable" > "$OUT/host_env/mac_host.txt"
+else
+    { date -u +%Y-%m-%dT%H:%M:%SZ; uname -a; cat /etc/os-release 2>/dev/null || true; } > "$OUT/host_env/os.txt"
+    lscpu > "$OUT/host_env/lscpu.txt" 2>&1 || echo "unavailable" > "$OUT/host_env/lscpu.txt"
+    nproc > "$OUT/host_env/nproc.txt" 2>/dev/null || getconf _NPROCESSORS_ONLN > "$OUT/host_env/nproc.txt"
+    cat /proc/meminfo > "$OUT/host_env/meminfo.txt"
+    if [ -r /proc/device-tree/model ]; then tr -d '\0' < /proc/device-tree/model > "$OUT/host_env/device_model.txt"; else echo "unavailable" > "$OUT/host_env/device_model.txt"; fi
+    echo "unavailable (not a macOS host)" > "$OUT/host_env/mac_host.txt"
+fi
 docker version > "$OUT/host_env/docker_version.txt" 2>&1 || true
 docker info --format 'NCPU={{.NCPU}} MemTotal={{.MemTotal}} OSType={{.OSType}} Architecture={{.Architecture}} KernelVersion={{.KernelVersion}} OperatingSystem={{.OperatingSystem}} ServerVersion={{.ServerVersion}}' \
     > "$OUT/host_env/docker_info.txt" 2>&1 || true
@@ -133,10 +169,18 @@ else
     echo "unavailable (no WSL interop on this host)" > "$OUT/host_env/windows_host.txt"
 fi
 for f in $HARNESS_FILES; do cp "$B/$f" "$OUT/host_env/harness_$f"; done
-( cd "$B" && sha256sum $HARNESS_FILES ) > "$OUT/harness_sha256.txt"
+( cd "$B" && sha256 $HARNESS_FILES ) > "$OUT/harness_sha256.txt"
 pass "host metadata recorded; harness sha256 recorded"
 
 # ---------------------------------------------------------------- container run (dry or live)
+# Files written by the containers are owned by root; on native Linux that
+# would stop the host side from writing into $OUT. Hand them back to the
+# calling user after every container stage (a no-op on WSL /mnt/c).
+reclaim_out() {
+    docker run --rm -v "$OUT:/out" --entrypoint chown "$BENCH_IMAGE" -R "$(id -u):$(id -g)" /out >/dev/null 2>&1 || true
+}
+trap reclaim_out EXIT
+
 RUN_ENV=(-e OUT=/out -e LABEL="$LABEL" -e WARMUP="$WARMUP" -e REPS="$REPS" -e COMPILE_REPS="$COMPILE_REPS"
          -e EXP_TV001_JSON_SHA256="$EXP_JSON" -e EXP_TV001_TOML_SHA256="$EXP_TOML" -e EXP_FIXTURE_SHA256="$EXP_FX"
          -e EXP_R1CS="$EXP_R1CS" -e EXP_ACIR="$EXP_ACIR" -e EXP_GATES="$EXP_GATES"
@@ -148,7 +192,7 @@ if [ "$MODE" = "--plan" ]; then
     set +e
     docker run --rm -i -v "$OUT:/out" "${RUN_ENV[@]}" -e DRY_RUN=1 -e STRUCT_CHECK=1 "$BENCH_IMAGE" bash -s \
         < "$B/bench_in_container.sh" 2>&1 | tee "$OUT/host_env/dry_run_console.log"
-    rc=${PIPESTATUS[0]}; set -e
+    rc=${PIPESTATUS[0]}; set -e; reclaim_out
     [ "$rc" -eq 0 ] || stop "dry run failed (input hash or environment check)"
     pass "inside image: input hashes == this checkout; toolchain == pinned versions; GNU time usable"
     pass "inside image (unmeasured): $(tr '\n' ';' < "$OUT/structural_check/structural_summary.txt")"
@@ -158,7 +202,7 @@ else
     set +e
     docker run --rm -i -v "$OUT:/out" "${RUN_ENV[@]}" "$BENCH_IMAGE" bash -s \
         < "$B/bench_in_container.sh" 2>&1 | tee "$OUT/host_env/bench_console.log"
-    rc=${PIPESTATUS[0]}; set -e
+    rc=${PIPESTATUS[0]}; set -e; reclaim_out
     [ "$rc" -eq 0 ] || stop "measurement stopped (see $OUT/logs/STOP.txt and host_env/bench_console.log)"
 fi
 
@@ -228,6 +272,7 @@ const lscpu = rd("host_env/lscpu.txt") || "";
 const g = (re) => { const m = lscpu.match(re); return m ? m[1].trim() : null; };
 const os = (rd("host_env/os.txt") || "").split("\n");
 const win = (rd("host_env/windows_host.txt") || "").trim().split("\n");
+const mac = (rd("host_env/mac_host.txt") || "").trim().split("\n");
 const dinfo = kv((rd("host_env/docker_info.txt") || "").trim().split(" ").join("\n"));
 const dver = rd("host_env/docker_version.txt") || "";
 const meta = {
@@ -247,6 +292,12 @@ const meta = {
     windows_host_physical_ram_bytes: /^\d+$/.test(win[0] || "") ? Number(win[0]) : "unavailable",
     windows_host_cpu: win[1] || "unavailable",
     windows_host_os: win[2] || "unavailable",
+    macos_host_physical_ram_bytes: /^\d+$/.test(mac[0] || "") ? Number(mac[0]) : "unavailable",
+    macos_host_cpu: /^\d+$/.test(mac[0] || "") ? mac[1] : "unavailable",
+    macos_host_os: /^\d+$/.test(mac[0] || "") ? mac[2] : "unavailable",
+    macos_host_cores: /^\d+$/.test(mac[0] || "") ? (mac[3] || "").replace(/^cores: /, "") : "unavailable",
+    macos_host_power: /^\d+$/.test(mac[0] || "") ? (mac[4] || "").replace(/^power: /, "") : "unavailable",
+    macos_host_lowpowermode: /^\d+$/.test(mac[0] || "") ? (mac[5] || "").replace(/^lowpowermode: /, "") : "unavailable",
   },
   docker: {
     server_version: dinfo.ServerVersion || null,
@@ -295,6 +346,7 @@ docker run --rm -i -v "$OUT:/out" -e WARMUP="$WARMUP" -e REPS="$REPS" -e COMPILE
     node - /out /workspace/testdata/kat/canonical_fixture.json < "$B/validate_outputs.js" | tee "$OUT/host_env/validation_console.txt"
 VALID=${PIPESTATUS[0]}
 set -e
+reclaim_out
 
 echo "== Postflight"
 repo_manifest "$REPO" 2>/dev/null | grep -v $'^\\.gitignore\t' > "$OUT/host_env/source_manifest_after.sha256" 2>/dev/null
@@ -305,7 +357,7 @@ else
 fi
 for pair in "circom/inputs/eprescription/canonical/TV-001.json:$EXP_JSON" "noir/redemption/tests/positive/TV-001.toml:$EXP_TOML" "testdata/kat/canonical_fixture.json:$EXP_FX"; do
     f="${pair%%:*}"; h="${pair##*:}"
-    if [ "$(sha256sum "$REPO/$f" | cut -d' ' -f1)" = "$h" ]; then echo "PASS  $f unchanged" | tee -a "$CHECKS"; else echo "FAIL  $f changed" | tee -a "$CHECKS"; VALID=1; fi
+    if [ "$(sha256 "$REPO/$f" | cut -d' ' -f1)" = "$h" ]; then echo "PASS  $f unchanged" | tee -a "$CHECKS"; else echo "FAIL  $f changed" | tee -a "$CHECKS"; VALID=1; fi
 done
 
 cat "$OUT/benchmark_report.txt"

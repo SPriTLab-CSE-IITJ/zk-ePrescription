@@ -34,6 +34,49 @@ Each command prints one line per check; full tool output is written to
 `results/logs/` inside the container (mount it with `-v "$PWD/results:/workspace/results"`
 to keep it). `docker run --rm -it zkep bash` opens a shell with every tool.
 
+## One command: clone, test and benchmark on your machine
+
+```bash
+git clone https://github.com/SPriTLab-CSE-IITJ/zk-ePrescription.git
+cd zk-ePrescription
+bash bench/run_device.sh        # sudo bash bench/run_device.sh if your user cannot run docker
+```
+
+`bench/run_device.sh` does everything in one go: records the machine, builds
+the image, runs the full regression (E2), runs the benchmark (E3), prints a
+summary, checks that your compiled circuits are identical to the published
+ones, and packs the result into `results/<label>_bench.tgz`. It works on Linux
+(x86-64 and ARM64, including Jetson and Raspberry Pi 5 with a 64-bit OS),
+Windows through WSL2, and macOS with Docker Desktop. Allow about 12 GB of disk
+and 20–40 minutes on a PC (1–3 hours on a small board, mostly the first build).
+
+It changes nothing on your machine unless you ask: on a fresh Debian/Ubuntu
+board with nothing installed, use
+`sudo bash bench/run_device.sh --install-docker --add-swap --max-performance`.
+Options are described in [`bench/README.md`](bench/README.md).
+
+## Benchmark results
+
+Both backends were measured with this procedure on five platforms. Every run
+passed all 46 validation checks, and all five built byte-identical circuits.
+
+![Time per redemption on five platforms](docs/figures/benchmark_prove_time.svg)
+
+![Peak proving memory on five platforms](docs/figures/benchmark_prove_memory.svg)
+
+| Median | Laptop | Desktop | Server | Jetson Orin Nano | Raspberry Pi 5* |
+|---|---:|---:|---:|---:|---:|
+| Groth16 prove / verify | 0.797 / 0.354 s | 0.588 / 0.224 s | 1.163 / 0.690 s | 2.479 / 0.854 s | 2.988 / 0.652 s |
+| UltraHonk prove / verify | 0.421 / 0.009 s | 0.293 / 0.007 s | 0.367 / 0.017 s | 0.733 / 0.023 s | 1.618 / 0.033 s |
+| Proof size, Groth16 / UltraHonk | 0.8 KB / 14.3 KB | same | same | same | same |
+
+\*The Pi 5 ran at 79–87 °C with firmware throttling; its times are an upper
+bound. Full tables, run conditions and setup costs:
+[`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). The raw result
+archives of all five runs, with a script that recomputes every number from the
+individual runs, are in the release
+[bench-evidence-2026-10-30](https://github.com/SPriTLab-CSE-IITJ/zk-ePrescription/releases/tag/bench-evidence-2026-10-30).
+
 ---
 
 ## Major claims
@@ -42,8 +85,8 @@ to keep it). `docker run --rm -it zkep bash` opens a shell with every tool.
 |---|---|---|
 | **C1** Equivalence | Both backends compute identical protocol values (Poseidon2 permutation and sponge, C, I, N, registry leaves, nodes and root, PB) for identical inputs. | E1: 107/107 equal |
 | **C2** Soundness checks | Valid redemptions verify in both backends; every attack vector (20) is rejected by a circuit constraint, and tampered public inputs do not verify. | E2: summary table |
-| **C3** Laptop performance | Per-redemption cost of both stacks on one x86-64 laptop, as reported in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). | E3 |
-| **C4** Raspberry Pi 5 | Native ARM64 results. | E4, pending |
+| **C3** Performance | Per-redemption cost of both stacks on three x86-64 machines (laptop, desktop, 128-core server), as reported in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). | E3 |
+| **C4** ARM64 boards | The same protocol runs and is benchmarked on NVIDIA Jetson Orin Nano and Raspberry Pi 5. | E4 |
 
 ## Experiments
 
@@ -100,9 +143,10 @@ check rejected it in each backend (signature, registry, expiry,
 slot < threshold, s < l bound, point on curve, binary direction).
 [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md) explains each line.
 
-### E3: laptop benchmark (claim C3)
+### E3: benchmark (claim C3)
 
 About 10 compute minutes; runs on the host, not inside the container.
+`bash bench/run_device.sh` does all of this in one command; the individual steps are:
 
 ```bash
 docker build -t zkep .
@@ -116,9 +160,17 @@ Compare the printed medians with the table in
 on the hardware; circuit sizes, proof sizes and verification-key sizes must
 match exactly. See [`bench/README.md`](bench/README.md).
 
-### E4: Raspberry Pi 5 (claim C4)
+### E4: ARM64 boards (claim C4)
 
-Pending: same harness, native ARM64 build.
+The same command on the board (64-bit OS):
+
+```bash
+sudo bash bench/run_device.sh --install-docker --add-swap --max-performance
+```
+
+`--max-performance` locks the clocks (`jetson_clocks` on Jetson, the CPU
+governor elsewhere) and restores them at the end. Use active cooling on a
+Raspberry Pi 5: without it the board throttles, as in the published run.
 
 ---
 
@@ -162,7 +214,7 @@ noir/common/         Poseidon2 sponge and H1-H6 (the only Poseidon2 source in No
 noir/redemption/     redemption circuit (entry), tests/positive, tests/negative
 noir/issuance_binding/, noir/kat/, noir/registry_generator/
 scripts/             run.sh (container entry point), test.sh, demo.sh, suites, kat/
-bench/               benchmark harness v1.4
+bench/               run_device.sh (one-command run), benchmark harness v1.4.2
 docs/                specification, threat model, architecture, toolchain, results
 testdata/kat/        canonical fixture and KAT reference vectors
 testdata/historical/ pre-alignment vectors, kept for provenance only
