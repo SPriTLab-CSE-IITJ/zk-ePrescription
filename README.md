@@ -225,4 +225,6 @@ vectors are generated.
 
 ## License
 
-To be added.
+MIT; see [`LICENSE`](LICENSE). Dependencies keep their own licences: circomlib
+(whose templates the Circom circuits include), circomlibjs and snarkjs are
+GPL-3.0; Noir is MIT or Apache-2.0 and Barretenberg is Apache-2.0.

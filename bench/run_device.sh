@@ -209,7 +209,8 @@ else
     echo "Compiled circuits: DIFFER from the published benchmarks (this checkout changed the circuits); compare with care"
 fi
 if [ -s "$WORK/monitor.log" ]; then
-    echo "Max load during the run: $(awk '{print $2}' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1); max temperature: $(grep -o 'temp=[0-9.]*' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1) C"
+    MAXTEMP="$(grep -o 'temp=[0-9.][0-9.]*' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1 || true)"
+    echo "Max load during the run: $(awk '{print $2}' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1)${MAXTEMP:+; max temperature: $MAXTEMP C}"
 fi
 mkdir -p "$R/host_env/device_run"
 cp "$WORK"/*.log "$WORK"/*.txt "$R/host_env/device_run/" 2>/dev/null || true
