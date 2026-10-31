@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# zk-ePrescription — benchmark driver (host side), harness v1.4.
+# zk-ePrescription — benchmark driver (host side), harness v1.4.1.
+#
+# v1.4.1: output folder handed back to the calling user after each container
+# stage (no sudo on native Linux); SOURCE_COMMIT for ZIP downloads. The
+# measured commands are unchanged.
 #
 # v1.4 = v1.3 (used for the published laptop results, run 083403Z) adapted to
 # the restructured repository: circuit and package names, and preflight checks
@@ -24,6 +28,10 @@
 #
 # The harness never modifies the repository. Output (gitignored):
 #   results/bench/<label>_<UTC>[_plan]/   (override with BENCH_OUT=<dir>)
+#
+# Source downloaded as a ZIP instead of cloned: set SOURCE_COMMIT=<full sha> to
+# record the commit the ZIP was taken from; it is stored as "declared", and the
+# source manifest in host_env/ is the evidence that the files match it.
 set -euo pipefail
 
 LABEL="${1:?usage: run_benchmark.sh <platform-label> [--plan]}"
@@ -61,6 +69,9 @@ repo_manifest() {
 
 # ---------------------------------------------------------------- preflight
 COMMIT=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "not a git checkout")
+if [ "$COMMIT" = "not a git checkout" ] && [ -n "${SOURCE_COMMIT:-}" ]; then
+    COMMIT="declared $SOURCE_COMMIT (not a git checkout)"
+fi
 if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no 2>/dev/null)" ] && [ "${ALLOW_DIRTY:-0}" != "1" ]; then
     stop "uncommitted changes in the repository (commit them, or set ALLOW_DIRTY=1 for a test run)"
 fi
@@ -137,6 +148,14 @@ for f in $HARNESS_FILES; do cp "$B/$f" "$OUT/host_env/harness_$f"; done
 pass "host metadata recorded; harness sha256 recorded"
 
 # ---------------------------------------------------------------- container run (dry or live)
+# Files written by the containers are owned by root; on native Linux that
+# would stop the host side from writing into $OUT. Hand them back to the
+# calling user after every container stage (a no-op on WSL /mnt/c).
+reclaim_out() {
+    docker run --rm -v "$OUT:/out" --entrypoint chown "$BENCH_IMAGE" -R "$(id -u):$(id -g)" /out >/dev/null 2>&1 || true
+}
+trap reclaim_out EXIT
+
 RUN_ENV=(-e OUT=/out -e LABEL="$LABEL" -e WARMUP="$WARMUP" -e REPS="$REPS" -e COMPILE_REPS="$COMPILE_REPS"
          -e EXP_TV001_JSON_SHA256="$EXP_JSON" -e EXP_TV001_TOML_SHA256="$EXP_TOML" -e EXP_FIXTURE_SHA256="$EXP_FX"
          -e EXP_R1CS="$EXP_R1CS" -e EXP_ACIR="$EXP_ACIR" -e EXP_GATES="$EXP_GATES"
@@ -148,7 +167,7 @@ if [ "$MODE" = "--plan" ]; then
     set +e
     docker run --rm -i -v "$OUT:/out" "${RUN_ENV[@]}" -e DRY_RUN=1 -e STRUCT_CHECK=1 "$BENCH_IMAGE" bash -s \
         < "$B/bench_in_container.sh" 2>&1 | tee "$OUT/host_env/dry_run_console.log"
-    rc=${PIPESTATUS[0]}; set -e
+    rc=${PIPESTATUS[0]}; set -e; reclaim_out
     [ "$rc" -eq 0 ] || stop "dry run failed (input hash or environment check)"
     pass "inside image: input hashes == this checkout; toolchain == pinned versions; GNU time usable"
     pass "inside image (unmeasured): $(tr '\n' ';' < "$OUT/structural_check/structural_summary.txt")"
@@ -158,7 +177,7 @@ else
     set +e
     docker run --rm -i -v "$OUT:/out" "${RUN_ENV[@]}" "$BENCH_IMAGE" bash -s \
         < "$B/bench_in_container.sh" 2>&1 | tee "$OUT/host_env/bench_console.log"
-    rc=${PIPESTATUS[0]}; set -e
+    rc=${PIPESTATUS[0]}; set -e; reclaim_out
     [ "$rc" -eq 0 ] || stop "measurement stopped (see $OUT/logs/STOP.txt and host_env/bench_console.log)"
 fi
 
@@ -295,6 +314,7 @@ docker run --rm -i -v "$OUT:/out" -e WARMUP="$WARMUP" -e REPS="$REPS" -e COMPILE
     node - /out /workspace/testdata/kat/canonical_fixture.json < "$B/validate_outputs.js" | tee "$OUT/host_env/validation_console.txt"
 VALID=${PIPESTATUS[0]}
 set -e
+reclaim_out
 
 echo "== Postflight"
 repo_manifest "$REPO" 2>/dev/null | grep -v $'^\\.gitignore\t' > "$OUT/host_env/source_manifest_after.sha256" 2>/dev/null

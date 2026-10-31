@@ -42,7 +42,7 @@ to keep it). `docker run --rm -it zkep bash` opens a shell with every tool.
 |---|---|---|
 | **C1** Equivalence | Both backends compute identical protocol values (Poseidon2 permutation and sponge, C, I, N, registry leaves, nodes and root, PB) for identical inputs. | E1: 107/107 equal |
 | **C2** Soundness checks | Valid redemptions verify in both backends; every attack vector (20) is rejected by a circuit constraint, and tampered public inputs do not verify. | E2: summary table |
-| **C3** Laptop performance | Per-redemption cost of both stacks on one x86-64 laptop, as reported in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). | E3 |
+| **C3** x86-64 performance | Per-redemption cost of both stacks on two x86-64 machines (a laptop and a desktop), as reported in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). | E3 |
 | **C4** Raspberry Pi 5 | Native ARM64 results. | E4, pending |
 
 ## Experiments
@@ -100,7 +100,7 @@ check rejected it in each backend (signature, registry, expiry,
 slot < threshold, s < l bound, point on curve, binary direction).
 [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md) explains each line.
 
-### E3: laptop benchmark (claim C3)
+### E3: x86-64 benchmark (claim C3)
 
 About 10 compute minutes; runs on the host, not inside the container.
 
@@ -162,7 +162,7 @@ noir/common/         Poseidon2 sponge and H1-H6 (the only Poseidon2 source in No
 noir/redemption/     redemption circuit (entry), tests/positive, tests/negative
 noir/issuance_binding/, noir/kat/, noir/registry_generator/
 scripts/             run.sh (container entry point), test.sh, demo.sh, suites, kat/
-bench/               benchmark harness v1.4
+bench/               benchmark harness v1.4.1
 docs/                specification, threat model, architecture, toolchain, results
 testdata/kat/        canonical fixture and KAT reference vectors
 testdata/historical/ pre-alignment vectors, kept for provenance only
