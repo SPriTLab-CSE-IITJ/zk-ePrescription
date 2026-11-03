@@ -66,14 +66,15 @@ passed all 46 validation checks, and all five built byte-identical circuits.
 
 | Median | Laptop | Desktop | Server | Jetson Orin Nano | Raspberry Pi 5* |
 |---|---:|---:|---:|---:|---:|
-| Groth16 prove / verify | 0.797 / 0.354 s | 0.588 / 0.224 s | 1.163 / 0.690 s | 2.479 / 0.854 s | 2.988 / 0.652 s |
-| UltraHonk prove / verify | 0.421 / 0.009 s | 0.293 / 0.007 s | 0.367 / 0.017 s | 0.733 / 0.023 s | 1.618 / 0.033 s |
+| Groth16 prove / verify | 0.797 / 0.354 s | 0.588 / 0.224 s | 1.163 / 0.690 s | 2.479 / 0.854 s | 2.853 / 0.633 s |
+| UltraHonk prove / verify | 0.421 / 0.009 s | 0.293 / 0.007 s | 0.367 / 0.017 s | 0.733 / 0.023 s | 1.498 / 0.028 s |
 | Proof size, Groth16 / UltraHonk | 0.8 KB / 14.3 KB | same | same | same | same |
 
-\*The Pi 5 ran at 79–87 °C with firmware throttling; its times are an upper
-bound. Full tables, run conditions and setup costs:
+\*The Pi 5 had no heatsink or fan and reached 86.5 °C; its firmware reported the
+soft temperature limit in 61 % of samples, so its times are an upper bound (an
+earlier run, throttled in 93 % of samples, was only 5–8 % slower at proving). Full tables, run conditions and setup costs:
 [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). The raw result
-archives of all five runs, with a script that recomputes every number from the
+archives of all runs, with a script that recomputes every number from the
 individual runs, are in the release
 [bench-evidence-2026-10-30](https://github.com/SPriTLab-CSE-IITJ/zk-ePrescription/releases/tag/bench-evidence-2026-10-30).
 
