@@ -10,13 +10,17 @@ include "poseidon2.circom";
 include "schnorr_bjj.circom";
 include "registry.circom";
 
-// C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold)
+// C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
+// The patient reference I = H2(patient_secret) is part of the signed
+// commitment (protocol v2, docs/protocol_specification.md Section 6), so the
+// doctor's signature binds the prescription to the patient's secret.
 template Commitment() {
     signal input prescription_id;
     signal input doctor_id;
     signal input medicine_code;
     signal input expiry;
     signal input threshold;
+    signal input identity;
 
     signal output commitment;
 
@@ -26,11 +30,13 @@ template Commitment() {
     h.medicine_code <== medicine_code;
     h.expiry <== expiry;
     h.threshold <== threshold;
+    h.identity <== identity;
 
     commitment <== h.out;
 }
 
-// I = H2(patient_secret). Issuance-side only; not a Phase-4 public output.
+// I = H2(patient_secret). Computed inside the redemption circuit from the
+// private secret; never a public output.
 template IdentityBinding() {
     signal input patient_secret;
     signal output identity_ref;

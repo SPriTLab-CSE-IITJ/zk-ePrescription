@@ -57,19 +57,21 @@ ok("noir bb gate count parsed", Number.isInteger(n.barretenberg_circuit_size_gat
 
 // Same aligned circuit as the regression/provenance stage (informational
 // comparison against the values recorded at freeze time; a difference is a FAIL).
-const FROZEN = { r1cs_constraints: 12291, acir_opcodes: 16681, bb_gates: 22182 };
-ok("circom constraints equal frozen aligned build (12291)", c.r1cs_constraints === FROZEN.r1cs_constraints, c.r1cs_constraints);
-ok("noir ACIR opcodes equal frozen aligned build (16681)", n.acir_opcodes_nargo_info === FROZEN.acir_opcodes, n.acir_opcodes_nargo_info);
-ok("noir bb gates equal frozen aligned build (22182)", n.barretenberg_circuit_size_gates === FROZEN.bb_gates, n.barretenberg_circuit_size_gates);
+// Protocol v2 (patient reference I inside C). v1: 12291 / 16681 / 22182.
+const FROZEN = { r1cs_constraints: 12648, acir_opcodes: 16686, bb_gates: 22259 };
+ok("circom constraints equal frozen v2 build (12648)", c.r1cs_constraints === FROZEN.r1cs_constraints, c.r1cs_constraints);
+ok("noir ACIR opcodes equal frozen v2 build (16686)", n.acir_opcodes_nargo_info === FROZEN.acir_opcodes, n.acir_opcodes_nargo_info);
+ok("noir bb gates equal frozen v2 build (22259)", n.barretenberg_circuit_size_gates === FROZEN.bb_gates, n.barretenberg_circuit_size_gates);
 
 // Legacy benchmark never invoked
 const cmds = fs.readFileSync(path.join(OUT, "benchmark_commands.txt"), "utf8");
 ok("scripts/benchmark.js not invoked", !/benchmark\.js/.test(cmds), null);
 
-// Independent sanity check (NOT the source of truth): values recorded at freeze.
+// Independent sanity check (NOT the source of truth): values recorded at the
+// protocol-v2 freeze (v1: C 0x2206c427..., N 0x13ffd498...).
 const SANITY = {
-    C: "0x2206c4274f31bb0a0545087c6da9b5e5f81932fbc8617bc1e596e1c04bc85e6b",
-    N: "0x13ffd498a119ba5754cfb86eb5122304b06afa08bb92751c13b2e86056b02bf8",
+    C: "0x1858ba4c0898b61f8b72975576b17bffd22f7d24f9d9e6fc90a43073e2d44437",
+    N: "0x0e51d2032394862ca54cefdf014042d90fad649832db445f0d9214f603aef3c3",
 };
 ok("sanity: fixture TV-001 C equals value recorded at freeze", exp.commitment === SANITY.C, exp.commitment);
 ok("sanity: fixture TV-001 N equals value recorded at freeze", exp.nullifier === SANITY.N, exp.nullifier);

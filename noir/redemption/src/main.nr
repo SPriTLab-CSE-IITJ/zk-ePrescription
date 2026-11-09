@@ -6,7 +6,7 @@ mod outputs;
 mod bjj_core;
 mod fixture_tests;
 
-use commitment::compute_commitment;
+use commitment::{compute_commitment, compute_patient_reference};
 use policy::evaluate_policy;
 use registry::verify_registry;
 use schnorr::verify_signature;
@@ -45,8 +45,11 @@ fn main(
 ) -> pub [Field; 2] {
     // ==========================================================
     // Phase 4 – Milestone 1
-    // Commitment computation
+    // Patient reference I = H2(patient_secret) (private) and
+    // commitment C = H1(pid, did, med, expiry, threshold, I)
     // ==========================================================
+
+    let patient_reference = compute_patient_reference(patient_secret);
 
     let commitment = compute_commitment(
         prescription_id,
@@ -54,6 +57,7 @@ fn main(
         medicine_code,
         expiry_date,
         quantity_threshold,
+        patient_reference,
     );
 
     // ==========================================================

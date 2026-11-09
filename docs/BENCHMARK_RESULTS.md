@@ -1,5 +1,11 @@
 # Benchmark Results
 
+> **Protocol v1.** These results were measured on the protocol-v1 circuits
+> (commit `f257cad`), in which the commitment did not include the patient
+> reference `I`. Protocol v2 adds it (12,648 R1CS constraints instead of
+> 12,291; 16,686 ACIR opcodes / 22,259 gates instead of 16,681 / 22,182); the
+> five platforms are being re-measured.
+
 Both backends were measured on the canonical fixture TV-001 on five machines:
 two x86-64 PCs, a 128-core server and two ARM64 boards. Every run passed
 all 46 validation checks (every proof verified, public outputs equal to the

@@ -57,8 +57,9 @@ The registry contains the authorized doctor public keys.
 
 ### Registration / Issuance Layer
 
-This layer establishes the patient binding and associates a prescription with
-the registered patient during prescription issuance.
+This layer provisions the patient's protocol secret and, at issuance, includes
+the patient reference I = H2(s_P) in the signed prescription commitment, which
+binds the prescription to that secret (protocol v2).
 
 ### Redemption / Notification Layer
 
@@ -80,8 +81,10 @@ The adversary may:
 - observe public proof or redemption information and attempt to infer hidden
   patient or prescription information.
 
-The adversary may also obtain a valid prescription artifact and attempt to
-redeem it more than once, subject to the protocol's redemption rules.
+The adversary may also obtain a valid prescription artifact (for example a
+copy of the issuance record) and attempt to redeem it more than once, or under
+a patient secret of its own choosing, subject to the protocol's redemption
+rules.
 
 ---
 
@@ -96,8 +99,8 @@ The threat model assumes:
    public keys.
 4. The external patient-registration system correctly authenticates the
    patient's national or medical health identity.
-5. The issuance layer correctly establishes the patient-prescription
-   association.
+5. The issuance layer includes the reference I of the enrolled patient in the
+   commitment it has the doctor sign.
 6. The redemption state used for nullifier checking is maintained correctly.
 7. The notification mechanism reliably records and reports successful
    redemptions.
@@ -117,44 +120,43 @@ The external identity layer authenticates the patient using:
 
     HealthID
 
-and establishes a protocol-specific patient binding:
+and provisions a protocol-specific patient secret:
 
-    HealthID -> B_P
+    HealthID -> s_P
 
-The raw HealthID is not required as a public input to the ZK prescription
-verification circuit.
+The raw HealthID is never a witness or public input of the ZK circuit.
 
 ### Prescription Issuance
 
-The doctor issues prescription P for the registered patient binding.
+The patient's app sends the patient reference
 
-The existing prescription commitment remains:
+    I = H2(s_P)
 
-    C = Commit(P)
+and the doctor signs the commitment over the prescription fields and I:
 
-The patient-prescription binding is established separately:
-
-    PB = Bind(B_P, C)
-
-This does not modify the existing prescription commitment.
-
-In the current prototype, PB is an issuance-side binding artifact. The
-existing pharmacy-facing redemption circuit does not expose PB as a public
-verification input.
+    C = Commit(P, I) = H1(pid, did, med, expiry, threshold, I)
 
 ### Redemption
 
-Redemption is bearer-based.
+The redemption circuit recomputes I from the private s_P and verifies the
+doctor's signature on C. A secret other than s_P gives a different, unsigned
+commitment, so a copy of the issuance record cannot be redeemed under another
+secret, and the same prescription cannot be given fresh nullifiers.
 
-The person presenting the prescription at the pharmacy does not have to be the
-patient. For example, a family member or authorized representative may redeem
-the prescription.
-
-Therefore:
+Redemption requires the patient's credential (the secret), not the patient's
+physical presence. A family member or authorized representative may redeem
+the prescription using the patient's app. Therefore:
 
     Presenter != Patient
 
-is not itself a protocol violation.
+is not itself a protocol violation, but
+
+    Presenter without s_P
+
+cannot redeem.
+
+Protocol v1 used an issuance-side binding PB = H6(I, C) that the redemption
+circuit did not verify; it is superseded by I inside C.
 
 The pharmacy does not require a fresh national-health-ID authentication for
 every redemption.
@@ -195,7 +197,7 @@ to establish the enforced cryptographic properties.
 The privacy objective is therefore to minimize information revealed during
 verification while allowing the verifier to establish:
 
-    C = Commit(P)
+    C = Commit(P, H2(s_P))
 
     PK_D in DoctorRegistry
 
@@ -299,6 +301,15 @@ constitute a win:
 
 where both correspond to the same redemption instance.
 
+A redemption instance is a refill slot of one signed prescription, (C, slot),
+independent of the secret the prover uses. The adversary also wins if it gets
+more than `threshold` redemptions of one commitment C accepted, under any
+secrets. In protocol v2 this reduces to the soundness of the proof system,
+the collision resistance of H1 and H2 and the unforgeability of the doctor's
+signature: for a fixed signed C the secret is fixed, so each slot has exactly
+one valid nullifier. (Protocol v1 did not bind the secret to C and loses this
+game: test vectors NT-021 and NT-022.)
+
 The intended invariant is:
 
     N not in S
@@ -386,11 +397,11 @@ that should remain private.
 
 The game includes unintended linkage between observations.
 
-The bearer-redemption model is explicit:
+The credential-based redemption model is explicit:
 
     Presenter != Patient
 
-is permitted.
+is permitted, provided the presenter holds the patient's secret.
 
 The protocol therefore does not claim to identify the physical person who
 presents a prescription at the pharmacy.
@@ -407,7 +418,7 @@ The protocol separates the following properties:
 
 1. Prescription integrity:
 
-       C = Commit(P)
+       C = Commit(P, I)
 
 2. Doctor authorization:
 
@@ -419,8 +430,8 @@ The protocol separates the following properties:
 
 4. Patient-prescription binding:
 
-       HealthID -> B_P
-       PB = Bind(B_P, C)
+       HealthID -> s_P
+       I = H2(s_P) inside the signed C
 
 5. Witness privacy / minimal disclosure:
 
@@ -434,13 +445,14 @@ The protocol separates the following properties:
        currentDate <= expiry
        slotIndex < quantityThreshold
 
-7. Replay resistance:
+7. Replay resistance and refill limit:
 
-       N not in S
+       N not in S, N = H3(s_P, C, slot), slot < threshold
+       (at most `threshold` redemptions per prescription)
 
-8. Bearer-compatible redemption:
+8. Credential-based redemption:
 
-       Presenter may differ from Patient
+       Presenter may differ from Patient, but must hold s_P
 
 9. Redemption accountability:
 

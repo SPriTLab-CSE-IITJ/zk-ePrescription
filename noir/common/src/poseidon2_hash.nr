@@ -42,7 +42,8 @@ global DOMAIN_IDENTITY: Field = 2;
 global DOMAIN_NULLIFIER: Field = 3;
 global DOMAIN_REGISTRY_LEAF: Field = 4;
 global DOMAIN_MERKLE_NODE: Field = 5;
-global DOMAIN_PATIENT_BINDING: Field = 6;
+// Domain 6 (patient binding PB = H6(I, C), protocol v1) is retired: since
+// protocol v2 the patient reference I is an input of the commitment H1.
 
 fn domain_tagged_hash<let N: u32>(domain: Field, inputs: [Field; N]) -> Field {
     let mut tagged: [Field; N + 1] = [0; N + 1];
@@ -85,10 +86,6 @@ pub fn registry_leaf_hash(
 
 pub fn merkle_node_hash(left: Field, right: Field) -> Field {
     domain_tagged_hash(DOMAIN_MERKLE_NODE, [left, right])
-}
-
-pub fn patient_binding_hash<let N: u32>(inputs: [Field; N]) -> Field {
-    domain_tagged_hash(DOMAIN_PATIENT_BINDING, inputs)
 }
 
 
@@ -149,6 +146,15 @@ mod tests {
         let node = merkle_node_hash(10, 20);
 
         assert(leaf != node);
+    }
+
+    #[test]
+    fn commitment_binds_patient_reference() {
+        // Same prescription fields, two patient secrets: different C (protocol v2).
+        let c1 = commitment_hash([1001, 5001, 123, 20261231, 3, identity_hash([12345])]);
+        let c2 = commitment_hash([1001, 5001, 123, 20261231, 3, identity_hash([12346])]);
+
+        assert(c1 != c2);
     }
 
     #[test]

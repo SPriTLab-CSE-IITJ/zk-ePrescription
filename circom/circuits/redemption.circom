@@ -2,8 +2,9 @@ pragma circom 2.1.6;
 
 // Integrated Phase-4 redemption circuit (Circom / Groth16).
 // Implements the Phase-4 redemption statement of
-// docs/protocol_specification.md (Section 16), identical in logic to
-// noir/redemption.
+// docs/protocol_specification.md (Section 16, protocol v2), identical in
+// logic to noir/redemption. The patient secret is bound to the signed
+// commitment through I = H2(patient_secret).
 //
 // Public signals (snarkjs order): [commitment_out, nullifier_out, current_date, root]
 
@@ -39,13 +40,18 @@ template EPrescriptionMain(DEPTH) {
     signal output commitment_out;
     signal output nullifier_out;
 
-    // 1. Commitment C = H1(pid, did, med, expiry, threshold)
+    // 1. Patient reference I = H2(patient_secret) (private) and
+    //    commitment C = H1(pid, did, med, expiry, threshold, I)
+    component identity = IdentityBinding();
+    identity.patient_secret <== patient_secret;
+
     component commitment = Commitment();
     commitment.prescription_id <== prescription_id;
     commitment.doctor_id <== doctor_id;
     commitment.medicine_code <== medicine_code;
     commitment.expiry <== expiry;
     commitment.threshold <== threshold;
+    commitment.identity <== identity.identity_ref;
     commitment_out <== commitment.commitment;
 
     // 2. Policy

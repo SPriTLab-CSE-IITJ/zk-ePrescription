@@ -19,13 +19,13 @@ function circomSite([tpl, line]) {
     if (tpl === "SchnorrBJJ") return n <= 60 ? "s < l bound" : n <= 85 ? "8*PK != O" : "signature";
     if (tpl === "DoctorRegistry") return n <= 50 ? "binary direction" : "registry";
     if (tpl === "BabyCheck") return "point on curve";
-    if (tpl === "EPrescriptionMain") return n <= 57 ? "slot < threshold" : n <= 62 ? "expiry" : n <= 75 ? "registry" : "signature";
+    if (tpl === "EPrescriptionMain") return n <= 61 ? "slot < threshold" : n <= 66 ? "expiry" : n <= 78 ? "registry" : "signature";
     return tpl || "?";
 }
 // Noir: failing assertion -> check (noir/redemption/src)
 const NOIR = {
-    "src/main.nr:118": "slot < threshold", "src/main.nr:119": "expiry",
-    "src/main.nr:120": "registry", "src/main.nr:121": "signature",
+    "src/main.nr:122": "slot < threshold", "src/main.nr:123": "expiry",
+    "src/main.nr:124": "registry", "src/main.nr:125": "signature",
     "src/registry.nr:7": "binary direction", "src/schnorr.nr:19": "PK on curve",
     "src/schnorr.nr:20": "R on curve", "src/schnorr.nr:21": "s < l bound",
     "src/schnorr.nr:37": "8*PK != O",
