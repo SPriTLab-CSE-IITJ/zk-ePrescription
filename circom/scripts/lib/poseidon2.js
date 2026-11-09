@@ -6,7 +6,8 @@
 //   (extracted verbatim from Noir's std::hash::poseidon2_permutation solver).
 // - Sponge: state [0,0,0, n*2^64], rate 3, permute after each full block,
 //   absorb remainder, final permutation, output state[0].
-// - Domain-tagged hashes H1..H6 prepend the domain identifier.
+// - Domain-tagged hashes H1..H5 prepend the domain identifier (domain 6, the
+//   protocol-v1 patient binding PB, is retired).
 //
 // This file mirrors noir/common/src/poseidon2_hash.nr and
 // circom/circuits/poseidon2.circom. It is used by fixture generators and by
@@ -89,7 +90,6 @@ const DOMAIN = {
     NULLIFIER: 3n,
     REGISTRY_LEAF: 4n,
     MERKLE_NODE: 5n,
-    PATIENT_BINDING: 6n,
 };
 
 const tagged = (d, xs) => hashRaw([d, ...xs]);
@@ -99,11 +99,11 @@ module.exports = {
     permutation,
     hashRaw,
     DOMAIN,
-    H1: (pid, did, med, expiry, threshold) => tagged(DOMAIN.COMMITMENT, [pid, did, med, expiry, threshold]),
+    // Protocol v2: the patient reference I = H2(patient_secret) is part of C.
+    H1: (pid, did, med, expiry, threshold, identity) => tagged(DOMAIN.COMMITMENT, [pid, did, med, expiry, threshold, identity]),
     H2: (secret) => tagged(DOMAIN.IDENTITY, [secret]),
     H3: (secret, c, slot) => tagged(DOMAIN.NULLIFIER, [secret, c, slot]),
     H4: (did, pkx, pky) => tagged(DOMAIN.REGISTRY_LEAF, [did, pkx, pky]),
     H5: (left, right) => tagged(DOMAIN.MERKLE_NODE, [left, right]),
-    H6: (i, c) => tagged(DOMAIN.PATIENT_BINDING, [i, c]),
     challenge: (rx, ry, pkx, pky, c) => hashRaw([rx, ry, pkx, pky, c]),
 };

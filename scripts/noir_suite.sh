@@ -5,7 +5,7 @@
 #   compile -> valid vectors (execute, public outputs equal
 #   testdata/kat/canonical_fixture.json, bb prove + verify, tampered public
 #   inputs must not verify) -> attack vectors (each must fail a circuit
-#   assertion) -> issuance binding (noir/issuance_binding).
+#   assertion).
 #
 # ZKEP_SKIP_BB=1 skips only bb prove/verify (for machines that cannot download
 # the Barretenberg CRS); the run is then reported as INCOMPLETE, never as PASS.
@@ -22,6 +22,7 @@ PKG_ROOT="$REPO/noir/$PKG"
 FIXTURE="$REPO/testdata/kat/canonical_fixture.json"
 SKIP_BB="${ZKEP_SKIP_BB:-0}"
 : >"$RESULTS/noir_negative.tsv"
+: >"$RESULTS/noir_outputs.tsv"
 
 count_passed() { grep -oE '[0-9]+ tests? passed' "$1" | tail -1 | grep -oE '^[0-9]+'; }
 
@@ -72,7 +73,8 @@ const [c, n] = m[1].split(",").map(hex);
 const e = fx.expected_public_outputs[id];
 console.log(`${id} C=${c} N=${n}`);
 if (c !== e.commitment || n !== e.nullifier) { console.log(`expected C=${e.commitment} N=${e.nullifier}`); process.exit(1); }
-' "$FIXTURE" "$NAME" "$OUT" >>"$LOG" 2>&1 || fail "valid vector $NAME" "public outputs differ from the fixture"
+require("fs").appendFileSync(process.argv[4], [id, c, n].join("\t") + "\n");
+' "$FIXTURE" "$NAME" "$OUT" "$RESULTS/noir_outputs.tsv" >>"$LOG" 2>&1 || fail "valid vector $NAME" "public outputs differ from the fixture"
     nv=$((nv + 1))
 
     [ "$SKIP_BB" = "1" ] && continue
@@ -140,12 +142,3 @@ done
 rm -f "$RESULTS/logs/_nt.log"
 record noir_attacks "$n/$total"
 ok "attack vectors NT-001..$(printf '%03d' "$total")" "$n/$total rejected by a constraint"
-
-# --- issuance binding --------------------------------------------------------
-(cd "$REPO/noir/issuance_binding" && nargo check && nargo test && nargo execute) \
-    >"$RESULTS/logs/noir_issuance.log" 2>&1 \
-    || { LOG="$RESULTS/logs/noir_issuance.log"; fail "issuance binding PB (noir/issuance_binding)" "test failed"; }
-cat "$RESULTS/logs/noir_issuance.log" >>"$LOG"
-n="$(count_passed "$RESULTS/logs/noir_issuance.log")"
-record noir_binding "$n/$n"
-ok "issuance binding PB = H6(I, C) tests" "$n/$n passed"

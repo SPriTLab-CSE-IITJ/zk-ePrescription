@@ -2,7 +2,7 @@ pragma circom 2.1.6;
 
 // Cross-backend known-answer-test harness (not a protocol circuit).
 // Exposes the raw permutation, the sponge for input lengths 1..7 and
-// the domain-tagged protocol hashes H1..H6 as outputs so that they can be
+// the domain-tagged protocol hashes H1..H5 as outputs so that they can be
 // compared against the Noir backend and the JS reference implementation.
 
 include "../poseidon2.circom";
@@ -30,7 +30,6 @@ template KatHashes() {
     signal output h3;
     signal output h4;
     signal output h5;
-    signal output h6;
 
     component p = Poseidon2Permutation();
     for (var i = 0; i < 4; i++) { p.in[i] <== perm_in[i]; }
@@ -44,17 +43,18 @@ template KatHashes() {
     component s6 = Poseidon2Sponge(6); for (var i = 0; i < 6; i++) { s6.in[i] <== sponge_in[i]; } sponge_out[5] <== s6.out;
     component s7 = Poseidon2Sponge(7); for (var i = 0; i < 7; i++) { s7.in[i] <== sponge_in[i]; } sponge_out[6] <== s7.out;
 
+    component id = H2Identity();
+    id.patient_secret <== patient_secret;
+    h2 <== id.out;
+
     component c = H1Commitment();
     c.prescription_id <== prescription_id;
     c.doctor_id <== doctor_id;
     c.medicine_code <== medicine_code;
     c.expiry <== expiry;
     c.threshold <== threshold;
+    c.identity <== id.out;
     h1 <== c.out;
-
-    component id = H2Identity();
-    id.patient_secret <== patient_secret;
-    h2 <== id.out;
 
     component n = H3Nullifier();
     n.patient_secret <== patient_secret;
@@ -72,11 +72,6 @@ template KatHashes() {
     m.left <== left;
     m.right <== right;
     h5 <== m.out;
-
-    component pb = H6PatientBinding();
-    pb.identity <== id.out;
-    pb.commitment <== c.out;
-    h6 <== pb.out;
 }
 
 component main = KatHashes();

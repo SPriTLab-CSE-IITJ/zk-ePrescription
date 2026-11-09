@@ -1,5 +1,16 @@
 # Protocol Specification
 
+**Version 2.** Protocol v2 binds the patient secret to the signed prescription
+by including the patient reference `I = H2(patient_secret)` in the commitment
+`C` (Sections 6-8). Protocol v1, measured in the benchmark release
+`bench-evidence-2026-10-30` (commit `f257cad`), used
+`C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold)` and an
+issuance-side binding `PB = H6(I, C)` that the redemption circuit never
+checked. Because the redemption circuit did not relate `patient_secret` to
+`C`, a holder of a valid issuance record could redeem it under any other
+secret and obtain a fresh nullifier for every slot, so v1 did not bound the
+number of redemptions. The v1 vectors are kept in `testdata/historical/v1/`.
+
 ## 1. Purpose
 
 This document defines the normative cryptographic and protocol semantics of the
@@ -126,7 +137,7 @@ obtained after the last complete block, with no further absorption.
 
 ### 4.2 Domain-tagged hashes
 
-The domain-separated protocol hashes `H1`-`H6` (Section 5) are defined by
+The domain-separated protocol hashes `H1`-`H5` (Section 5) are defined by
 prepending the domain identifier as the first absorbed element:
 
 ```text
@@ -158,7 +169,10 @@ The protocol uses the following domain identifiers:
 | Nullifier `H3` | `3` |
 | Registry leaf `H4` | `4` |
 | Merkle node `H5` | `5` |
-| Patient binding `H6` | `6` |
+| *(retired)* | `6` |
+
+Domain `6` was used by the protocol-v1 patient binding `PB = H6(I, C)`. It is
+retired in v2 and MUST NOT be reused for another construction.
 
 Domain separation MUST be preserved.
 
@@ -171,18 +185,23 @@ A protocol hash MUST NOT silently reuse another construction's domain.
 The prescription commitment is:
 
 ```text
+I = H2(patient_secret)
+
 C = H1(
     prescription_id,
     doctor_id,
     medicine_code,
     expiry,
-    threshold
+    threshold,
+    I
 )
 ```
 
-The five values above are part of the authenticated prescription statement.
+The six values above are part of the authenticated prescription statement.
 
-In particular, `expiry` and `threshold` MUST be included in the commitment.
+In particular, `expiry`, `threshold` and the patient reference `I` MUST be
+included in the commitment. Including `I` binds the prescription to the
+patient's secret (Section 8).
 
 The commitment therefore binds the prescription fields that are also relevant
 to authorization and policy evaluation.
@@ -195,21 +214,24 @@ commitment.
 
 ---
 
-## 7. Patient Identity Reference
+## 7. Patient Reference
 
-The protocol defines an internal identity construction:
+The protocol defines an internal patient reference:
 
 ```text
 I = H2(patient_secret)
 ```
 
-This value is used by the issuance-side patient-prescription binding described
-below.
+At issuance the patient gives `I` to the doctor, who includes it in the
+commitment (Section 6). During redemption the circuit recomputes `I` from the
+private `patient_secret`; `I` is a private intermediate value.
 
-`I` is not required to be a public output of the Phase-4 redemption circuit.
+`I` MUST NOT be a public output of the Phase-4 redemption circuit: a stable
+patient-derived value would be a correlation point across all of a patient's
+prescriptions.
 
-The redemption proof SHOULD expose only the public values required for the
-redemption protocol, namely the commitment and redemption nullifier.
+The redemption proof exposes only the public values required for the
+redemption protocol, namely the commitment and the redemption nullifier.
 
 The patient secret itself remains private.
 
@@ -217,26 +239,31 @@ The patient secret itself remains private.
 
 ## 8. Patient-Prescription Binding
 
-The issuance-side patient-prescription binding is:
+The patient-prescription binding is established by the doctor's signature on
+`C`, which contains `I = H2(patient_secret)`:
 
-```text
-PB = H6(I, C)
-```
+1. a different patient secret gives a different `I`;
+2. a different `I` gives a different commitment `C'`;
+3. the doctor's signature does not validate `C'` (assuming signature
+   unforgeability and collision resistance of `H1` and `H2`);
+4. hence, for a given signed `C`, only the secret behind `I` can produce a
+   valid redemption proof, and the same secret, commitment and slot always give
+   the same nullifier (Section 9).
 
-where:
+The binding is created once, at issuance, and checked by every redemption
+proof as part of the commitment relation; there is no separate identity check.
 
-```text
-I = H2(patient_secret)
-```
+Qualifications:
 
-This construction associates the patient credential with a prescription
-commitment during issuance/enrollment.
+- including `I` in `C` binds the prescription to a secret, not to a legal
+  person. That `patient_secret` belongs to the authenticated patient is
+  established by the external enrollment process (Section 3);
+- the redemption proof does not constitute fresh national/health-ID
+  authentication.
 
-The current Phase-4 redemption circuit does not consume or verify `PB`.
-
-Therefore Phase-4 redemption MUST NOT be described as performing fresh
-national/health-ID authentication or as independently re-establishing the
-issuance-side patient binding.
+Protocol v1 defined an issuance-side value `PB = H6(I, C)` that the
+redemption circuit did not verify. It is superseded by the construction above
+and removed.
 
 ---
 
@@ -253,7 +280,9 @@ N = H3(
 ```
 
 The nullifier is deterministic for the same patient secret, commitment, and
-slot index.
+slot index. Because the commitment fixes the patient secret (Section 8) and
+the policy fixes `slot_index < threshold` (Section 14.1), a prescription with
+threshold `t` has exactly `t` valid nullifiers, one per slot `0..t-1`.
 
 The patient secret is not revealed by the nullifier construction.
 
@@ -266,7 +295,12 @@ prescriptions.
 
 If single-use redemption is required, the external verifier or redemption
 service MUST record previously accepted nullifiers and reject a nullifier that
-has already been redeemed according to the application's replay policy.
+has already been redeemed according to the application's replay policy. The
+check and the insertion MUST be atomic, so that two verifiers cannot accept
+the same nullifier concurrently.
+
+The guarantee is one redemption per slot: a prescription with threshold `t`
+can be redeemed at most `t` times in total, not once overall.
 
 Thus:
 
@@ -509,13 +543,13 @@ That is:
 [commitment, nullifier]
 ```
 
-The redemption circuit SHOULD NOT expose:
+The redemption circuit MUST NOT expose:
 
 ```text
-H2(patient_secret)
+I = H2(patient_secret)
 ```
 
-as an unnecessary public identity reference.
+as a public identity reference (Section 7).
 
 ---
 
@@ -525,13 +559,15 @@ A successful Phase-4 proof establishes, subject to the stated cryptographic
 assumptions and implementation correctness, that the prover knows a witness
 satisfying all required relations:
 
-1. the prescription commitment is correctly computed;
+1. the prescription commitment is correctly computed from the prescription
+   fields and from `I = H2(patient_secret)` for the prover's secret;
 2. the prescription satisfies the policy constraints;
 3. the specified doctor identifier and public key are members of the authorized
    registry;
 4. the same public key validates the doctor signature;
 5. the signature authenticates the prescription commitment;
-6. the prover knows the patient secret used to derive the redemption nullifier;
+6. the prover knows the patient secret bound into the signed commitment, and
+   the same secret derives the redemption nullifier;
 7. the public nullifier is correctly derived from the patient secret,
    commitment, and slot index.
 
@@ -564,13 +600,12 @@ The required equality targets include:
 
 1. raw Poseidon2 permutation vectors;
 2. sponge test vectors;
-3. commitment `C`;
-4. identity value `I`;
+3. commitment `C` (including `I`);
+4. patient reference `I`;
 5. nullifier `N`;
 6. registry leaf `L`;
 7. Merkle node `M`;
-8. complete registry root;
-9. patient binding `PB`.
+8. complete registry root.
 
 The final integrated canonical fixture SHOULD additionally demonstrate:
 
@@ -606,7 +641,14 @@ Relevant cases include:
 - invalid signature;
 - invalid signature scalar;
 - invalid/off-curve public key;
-- invalid/off-curve signature nonce.
+- invalid/off-curve signature nonce;
+- a valid issuance record redeemed under a different patient secret
+  (patient binding, v2);
+- a different patient secret used to obtain a fresh nullifier for a slot.
+
+The redemption-service behaviour SHOULD also be tested on the outputs of both
+backends: each slot is accepted once, and a second redemption of the same slot
+(on any date, at any verifier) is rejected.
 
 A modification to any value authenticated by the commitment or signature MUST
 NOT silently continue to satisfy the corresponding verification relation.
@@ -712,10 +754,16 @@ Without the appropriate signing secret and under the security assumptions of
 the signature construction, an adversary should not be able to produce a valid
 signature for an unauthorized commitment.
 
+### Patient-prescription binding
+
+A redemption proof for a signed commitment `C` requires the secret behind the
+`I` contained in `C`; a different secret does not yield a valid proof
+(Section 8), subject to authenticated enrollment of the secret.
+
 ### Patient-secret privacy
 
-The patient secret is retained as a private witness rather than revealed as a
-public circuit value.
+The patient secret and the patient reference `I` are retained as private
+witness values rather than revealed as public circuit values.
 
 ### Policy enforcement
 
@@ -727,10 +775,12 @@ satisfied.
 The public nullifier is correctly derived from the private patient secret,
 commitment, and redemption slot.
 
-### Replay detection
+### Replay detection and refill limit
 
-The nullifier provides the value that an external redemption service can use
-to detect repeated redemption attempts.
+The nullifier provides the value that an external redemption service uses to
+detect repeated redemption attempts. With atomic nullifier storage, each slot
+is redeemed at most once, and a prescription with threshold `t` at most `t`
+times.
 
 These statements are protocol goals/implementation properties, not a formal
 security proof.
@@ -804,7 +854,7 @@ contain all required proving toolchains.
 Any change to the following is a protocol-level change and MUST be explicitly
 documented:
 
-- H1-H6 input sets;
+- H1-H5 input sets (and the retired domain 6);
 - Poseidon2 parameters;
 - domain identifiers;
 - commitment semantics;
@@ -826,11 +876,9 @@ leaf/node semantics remain unchanged.
 For reference, the core constructions are:
 
 ```text
-C  = H1(prescription_id, doctor_id, medicine_code, expiry, threshold)
-
 I  = H2(patient_secret)
 
-PB = H6(I, C)
+C  = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
 
 N  = H3(patient_secret, C, slot_index)
 
@@ -853,6 +901,7 @@ Policy:
 
 ```text
 current_date <= expiry
+slot_index   <  threshold
 ```
 
 Public Phase-4 redemption outputs:

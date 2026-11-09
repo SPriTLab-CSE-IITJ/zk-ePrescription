@@ -53,8 +53,11 @@ step() { echo; echo "=================== $* ($(date -u +%H:%M:%SZ))"; }
 die()  { echo; echo "STOPPED: $*"; echo "Full log: $LOG"; exit 1; }
 need_root() { [ "$(id -u)" -eq 0 ] || die "$1 needs root: run again with sudo"; }
 
-PAPER_R1CS=26cbeef7d32c609ddde24ca58757135400cbd6929f2d5c8199e4c487d0b56d1b
-PAPER_UH_VK=4e8a56ad6641942847392b9b39eac1ffd3e82d3e0e1fb5879c809776ce244c2d
+# Reference build of protocol v2 (patient reference I inside C). The v1
+# circuits of the published benchmark (bench-evidence-2026-10-30) were
+# R1CS 26cbeef7... and UltraHonk VK 4e8a56ad...
+PAPER_R1CS=569a178fc9fd080a68a0df35fed795f3ea63468d189828862071c25e93d69196
+PAPER_UH_VK=28d9573f4dd9252c3cbd03843181f3d39e5cbc1363be8776fe210b9d3caade26
 
 # ------------------------------------------------------------------ 0. platform
 step "0. Platform"
@@ -203,10 +206,10 @@ step "7. Summary"
 docker run --rm -v "$REPO/results:/workspace/results" --entrypoint node "$IMAGE" bench/print_summary.js "$R" || true
 R1CS=$(awk '$1 == "artifacts/circom/redemption.r1cs" {print $3}' "$R/artifact_manifest.sha256")
 UHVK=$(awk '$1 == "artifacts/noir/vk/vk" {print $3}' "$R/artifact_manifest.sha256")
-if [ "$R1CS" = "$PAPER_R1CS" ] && [ "$UHVK" = "$PAPER_UH_VK" ]; then
-    echo "Compiled circuits: identical to the published benchmarks (R1CS ${R1CS:0:12}..., UltraHonk VK ${UHVK:0:12}...)"
+if [ "$R1CS" = "$PAPER_R1CS" ] && { [ -z "$PAPER_UH_VK" ] || [ "$UHVK" = "$PAPER_UH_VK" ]; }; then
+    echo "Compiled circuits: identical to the protocol-v2 reference build (R1CS ${R1CS:0:12}..., UltraHonk VK ${UHVK:0:12}...)"
 else
-    echo "Compiled circuits: DIFFER from the published benchmarks (this checkout changed the circuits); compare with care"
+    echo "Compiled circuits: DIFFER from the protocol-v2 reference build (this checkout changed the circuits); compare with care"
 fi
 if [ -s "$WORK/monitor.log" ]; then
     MAXTEMP="$(grep -o 'temp=[0-9.][0-9.]*' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1 || true)"

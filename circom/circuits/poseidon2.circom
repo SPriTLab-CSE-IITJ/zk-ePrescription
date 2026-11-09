@@ -156,14 +156,16 @@ template H1Commitment() {
     signal input medicine_code;
     signal input expiry;
     signal input threshold;
+    signal input identity;
     signal output out;
 
-    component h = Poseidon2Tagged(1, 5);
+    component h = Poseidon2Tagged(1, 6);
     h.in[0] <== prescription_id;
     h.in[1] <== doctor_id;
     h.in[2] <== medicine_code;
     h.in[3] <== expiry;
     h.in[4] <== threshold;
+    h.in[5] <== identity;
     out <== h.out;
 }
 
@@ -213,13 +215,3 @@ template H5MerkleNode() {
     out <== h.out;
 }
 
-template H6PatientBinding() {
-    signal input identity;
-    signal input commitment;
-    signal output out;
-
-    component h = Poseidon2Tagged(6, 2);
-    h.in[0] <== identity;
-    h.in[1] <== commitment;
-    out <== h.out;
-}

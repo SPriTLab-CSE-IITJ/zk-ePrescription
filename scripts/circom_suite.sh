@@ -29,6 +29,7 @@ SNARKJS="${SNARKJS:-snarkjs}"
 WASM="$TMP/${CIRCUIT}_js/$CIRCUIT.wasm"
 GEN="$TMP/${CIRCUIT}_js/generate_witness.js"
 : >"$RESULTS/circom_negative.tsv"
+: >"$RESULTS/circom_outputs.tsv"
 
 rm -rf "$TMP"
 mkdir -p "$TMP"
@@ -68,6 +69,8 @@ for input in "$VEC"/TV-*.json; do
     grep -q "WITNESS IS CORRECT" "$TMP/wtns_check.log" || fail "valid vector $id" "witness does not satisfy the R1CS"
     quiet "$SNARKJS" wtns export json "$TMP/$id.wtns" "$TMP/$id.wtns.json"
     check_outputs "$id" "$TMP/$id.wtns.json" || fail "valid vector $id" "public outputs differ from the fixture"
+    node -e 'const w = require(process.argv[1]); const h = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
+console.log([process.argv[2], h(w[1]), h(w[2])].join("\t"));' "$TMP/$id.wtns.json" "$id" >>"$RESULTS/circom_outputs.tsv"
     n=$((n + 1))
 done
 record circom_valid "$n"
