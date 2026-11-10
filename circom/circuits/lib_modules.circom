@@ -10,14 +10,16 @@ include "poseidon2.circom";
 include "schnorr_bjj.circom";
 include "registry.circom";
 
-// C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
+// C = H1(prescription_id, doctor_id, medication_digest, expiry, threshold, I)
 // The patient reference I = H2(patient_secret) is part of the signed
-// commitment (protocol v2, docs/protocol_specification.md Section 6), so the
-// doctor's signature binds the prescription to the patient's secret.
+// commitment (since protocol v2, docs/protocol_specification.md Section 6),
+// so the doctor's signature binds the prescription to the patient's secret.
+// medication_digest D is the digest of the medication list (since v3,
+// Section 6.1); the redemption circuit also outputs it.
 template Commitment() {
     signal input prescription_id;
     signal input doctor_id;
-    signal input medicine_code;
+    signal input medication_digest;
     signal input expiry;
     signal input threshold;
     signal input identity;
@@ -27,7 +29,7 @@ template Commitment() {
     component h = H1Commitment();
     h.prescription_id <== prescription_id;
     h.doctor_id <== doctor_id;
-    h.medicine_code <== medicine_code;
+    h.medication_digest <== medication_digest;
     h.expiry <== expiry;
     h.threshold <== threshold;
     h.identity <== identity;

@@ -20,10 +20,12 @@
 // TEST KEYS ONLY: doctor keys are sk * Generator for sk = 123..126
 // (sk = 123 is the repository's pre-existing development key).
 //
-// Protocol v2: the commitment includes the patient reference
-// I = H2(patient_secret), C = H1(pid, did, med, expiry, threshold, I), so the
-// doctor's signature binds the prescription to the patient's secret. The
-// protocol-v1 vectors are kept in testdata/historical/v1/.
+// Protocol v3: the commitment is C = H1(pid, did, D, expiry, threshold, I)
+// with I = H2(patient_secret) (since v2: binds the prescription to the
+// patient's secret) and D the digest of the medication list (since v3:
+// scripts/lib/medication_list.js). D is a public output of the redemption
+// proof, so the pharmacy can check the medication list it is shown.
+// The protocol-v1 and v2 vectors are kept in testdata/historical/.
 
 "use strict";
 
@@ -31,6 +33,7 @@ const fs = require("fs");
 const path = require("path");
 const p2 = require("./lib/poseidon2");
 const { babyjub } = require("./lib/schnorr_bjj");
+const meds = require("../../scripts/lib/medication_list");
 
 const ROOT = path.resolve(__dirname, "../..");
 const hex = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
@@ -46,10 +49,21 @@ function write(rel, content) {
 // Canonical scenario (spec Section 19)
 // ---------------------------------------------------------------------------
 
+// Canonical medication list. TEST DATA: the codes are illustrative
+// placeholders, not checked against SNOMED CT.
+const MEDICATION_LIST = [
+    { code: "100000001", name: "Paracetamol 500 mg tablet", dosage: "1 tablet up to 4 times a day if needed", quantity: 20 },
+    { code: "100000002", name: "Amoxicillin 500 mg capsule", dosage: "1 capsule 3 times a day for 5 days", quantity: 15 },
+];
+// The same list with one changed quantity (20 -> 40): a different digest.
+const ALTERED_LIST = MEDICATION_LIST.map((m, i) => (i === 0 ? { ...m, quantity: 40 } : m));
+// Protocol v1/v2 had a single medicine code instead of D.
+const LEGACY_MEDICINE_CODE = 123n;
+
 const SCENARIO = {
     prescription_id: 1001n,
     doctor_id: 5001n,
-    medicine_code: 123n,
+    medication_digest: meds.digest(MEDICATION_LIST),
     patient_secret: 12345n,
     expiry: 20261231n,
     threshold: 3n,
@@ -107,7 +121,7 @@ function toCircom(w) {
     return {
         prescription_id: dec(w.prescription_id),
         doctor_id: dec(w.doctor_id),
-        medicine_code: dec(w.medicine_code),
+        medication_digest: dec(w.medication_digest),
         expiry: dec(w.expiry),
         threshold: dec(w.threshold),
         current_date: dec(w.current_date),
@@ -133,7 +147,7 @@ function toNoir(w, header) {
     lines.push(`doctor_id = "${dec(w.doctor_id)}"`);
     lines.push(`doctor_pubkey_x = "${hex(w.pk[0])}"`);
     lines.push(`doctor_pubkey_y = "${hex(w.pk[1])}"`);
-    lines.push(`medicine_code = "${dec(w.medicine_code)}"`);
+    lines.push(`medication_digest = "${dec(w.medication_digest)}"`);
     lines.push(`quantity_threshold = "${dec(w.threshold)}"`);
     lines.push(`expiry_date = "${dec(w.expiry)}"`);
     lines.push(`current_date = "${dec(w.current_date)}"`);
@@ -170,13 +184,13 @@ async function main() {
     function prescriptionFor(docIndex, fields) {
         const d = doctors[docIndex];
         const I = p2.H2(fields.patient_secret);
-        const C = p2.H1(fields.prescription_id, d.doctor_id, fields.medicine_code, fields.expiry, fields.threshold, I);
+        const C = p2.H1(fields.prescription_id, d.doctor_id, fields.medication_digest, fields.expiry, fields.threshold, I);
         const sig = sch.sign(d.sk, C);
         if (!sch.verify(d.pk, C, sig.R, sig.s)) throw new Error("signature self-check failed");
         return {
             prescription_id: fields.prescription_id,
             doctor_id: d.doctor_id,
-            medicine_code: fields.medicine_code,
+            medication_digest: fields.medication_digest,
             expiry: fields.expiry,
             threshold: fields.threshold,
             current_date: fields.current_date,
@@ -201,7 +215,7 @@ async function main() {
     // issuance record): its own reference I' and the commitment it implies.
     const OTHER_SECRET = 67890n;
     const otherI = p2.H2(OTHER_SECRET);
-    const otherSecretC = p2.H1(SCENARIO.prescription_id, SCENARIO.doctor_id, SCENARIO.medicine_code, SCENARIO.expiry, SCENARIO.threshold, otherI);
+    const otherSecretC = p2.H1(SCENARIO.prescription_id, SCENARIO.doctor_id, SCENARIO.medication_digest, SCENARIO.expiry, SCENARIO.threshold, otherI);
     if (otherSecretC === C) throw new Error("expected a different commitment for a different secret");
 
     // ---- Positive vectors ---------------------------------------------------
@@ -217,23 +231,34 @@ async function main() {
     // ---- Negative vectors ---------------------------------------------------
     const l = sch.l;
     const P = p2.P;
-    const otherC = prescriptionFor(0, { ...SCENARIO, medicine_code: 999n }); // valid signature over a different C
+    const alteredD = meds.digest(ALTERED_LIST);
+    if (alteredD === SCENARIO.medication_digest) throw new Error("expected a different digest for the altered list");
+    const otherC = prescriptionFor(0, { ...SCENARIO, medication_digest: alteredD }); // valid signature over a different C (other list)
     const rogueSk = 999n;
     const roguePk = sch.publicKey(rogueSk);
     const rogueSig = sch.sign(rogueSk, C);
     // Doctor 5002's registry membership combined with a signature by doctor 5001's key
     // over the commitment that names doctor 5002.
-    const C5002 = p2.H1(SCENARIO.prescription_id, 5002n, SCENARIO.medicine_code, SCENARIO.expiry, SCENARIO.threshold, I);
+    const C5002 = p2.H1(SCENARIO.prescription_id, 5002n, SCENARIO.medication_digest, SCENARIO.expiry, SCENARIO.threshold, I);
     const crossSig = sch.sign(123n, C5002);
 
     // The doctor's protocol-v1 signature over the v1 commitment of the same
     // fields, C_v1 = H1(pid, did, med, expiry, threshold) without I. Checked
     // against the archived v1 fixture so that NT-023 uses the real old signature.
-    const C_v1 = p2.hashRaw([p2.DOMAIN.COMMITMENT, SCENARIO.prescription_id, SCENARIO.doctor_id, SCENARIO.medicine_code, SCENARIO.expiry, SCENARIO.threshold]);
+    const C_v1 = p2.hashRaw([p2.DOMAIN.COMMITMENT, SCENARIO.prescription_id, SCENARIO.doctor_id, LEGACY_MEDICINE_CODE, SCENARIO.expiry, SCENARIO.threshold]);
     const sigV1 = sch.sign(123n, C_v1);
     {
         const v1 = require(path.join(ROOT, "testdata/historical/v1/kat/canonical_fixture.json"));
         if (hex(C_v1) !== v1.derived.commitment_C || hex(sigV1.s) !== v1.derived.signature.s) throw new Error("v1 signature does not match the archived v1 fixture");
+    }
+    // The doctor's protocol-v2 signature over the v2 commitment, which had a
+    // single medicine code instead of the medication-list digest D. Checked
+    // against the archived v2 fixture so that NT-025 uses the real old signature.
+    const C_v2 = p2.H1(SCENARIO.prescription_id, SCENARIO.doctor_id, LEGACY_MEDICINE_CODE, SCENARIO.expiry, SCENARIO.threshold, I);
+    const sigV2 = sch.sign(123n, C_v2);
+    {
+        const v2 = require(path.join(ROOT, "testdata/historical/v2/kat/canonical_fixture.json"));
+        if (hex(C_v2) !== v2.derived.commitment_C || hex(sigV2.s) !== v2.derived.signature.s) throw new Error("v2 signature does not match the archived v2 fixture");
     }
     const U64_LIMIT = 1n << 64n;
 
@@ -247,7 +272,7 @@ async function main() {
         { id: "NT-002", desc: "modified Merkle path element", w: witness(base, { path_elements: [base.path_elements[0] + 1n, base.path_elements[1]] }) },
         { id: "NT-003", desc: "expired prescription (current_date > expiry)", w: witness(base, { current_date: 20270101n }) },
         { id: "NT-004", desc: "slot_index == threshold", w: witness(base, { slot_index: SCENARIO.threshold }) },
-        { id: "NT-005", desc: "modified medicine_code (commitment changes, signature fails)", w: witness(base, { medicine_code: 124n }) },
+        { id: "NT-005", desc: "medication digest of another list (one quantity changed; commitment/signature fail)", w: witness(base, { medication_digest: alteredD }) },
         { id: "NT-006", desc: "modified prescription_id", w: witness(base, { prescription_id: 1002n }) },
         { id: "NT-007", desc: "modified expiry (later date; commitment/signature fail)", w: witness(base, { expiry: 20271231n }) },
         { id: "NT-008", desc: "modified threshold (4; commitment/signature fail)", w: witness(base, { threshold: 4n }) },
@@ -262,10 +287,10 @@ async function main() {
         { id: "NT-017", desc: "signature scalar s + l (satisfies equation mod l; must fail scalar bound)", w: witness(base, { s: base.s + l }) },
         { id: "NT-018", desc: "off-curve public key", w: witness(base, { pk: offCurvePk }) },
         { id: "NT-019", desc: "off-curve signature nonce R", w: witness(base, { R: offCurveR }) },
-        { id: "NT-020", desc: "valid signature over a different commitment", w: witness(base, { R: otherC.R, s: otherC.s }) },
+        { id: "NT-020", desc: "valid signature over a different commitment (other medication list)", w: witness(base, { R: otherC.R, s: otherC.s }) },
         // Patient binding (protocol v2): a valid issuance record redeemed under
         // another secret. In protocol v1 both were ACCEPTED with fresh nullifiers.
-        { id: "NT-021", desc: "valid issuance record redeemed under a different patient secret (copied QR)", w: witness(base, { patient_secret: OTHER_SECRET }) },
+        { id: "NT-021", desc: "valid issuance record redeemed under a different patient secret (copied issuance record)", w: witness(base, { patient_secret: OTHER_SECRET }) },
         { id: "NT-022", desc: "different patient secret to obtain a fresh nullifier for the last refill slot", w: witness(base, { patient_secret: OTHER_SECRET, slot_index: SCENARIO.threshold - 1n }) },
         // Version mix-up: the doctor's valid v1 signature (over C without I)
         // presented with the v2 statement.
@@ -273,6 +298,9 @@ async function main() {
         // Out-of-range slot: 2^64 does not fit u64. Circom rejects it in the
         // 64-bit range check; Noir rejects it when decoding the u64 input.
         { id: "NT-024", desc: "out-of-range refill slot (2^64, outside u64)", w: witness(base, { slot_index: U64_LIMIT }) },
+        // Version mix-up: the doctor's valid v2 signature (single medicine code,
+        // no medication-list digest) presented with the v3 statement.
+        { id: "NT-025", desc: "valid protocol-v2 signature (single medicine code instead of the list digest) used for v3", w: witness(base, { R: sigV2.R, s: sigV2.s }) },
     ];
 
     // Sanity: the s + l malleability vector really satisfies the equation mod l,
@@ -346,9 +374,16 @@ async function main() {
 
     // ---- Fixture record -----------------------------------------------------
     const fixture = {
-        _description: "Canonical cross-backend fixture (docs/protocol_specification.md Sections 11.1, 19), protocol v2: C = H1(pid, did, med, expiry, threshold, I) with I = H2(patient_secret). Generated by circom/scripts/build_canonical_fixture.js.",
-        protocol_version: 2,
+        _description: "Canonical cross-backend fixture (docs/protocol_specification.md Sections 6.1, 11.1, 19), protocol v3: C = H1(pid, did, D, expiry, threshold, I) with I = H2(patient_secret) and D the medication-list digest (a public output). Generated by circom/scripts/build_canonical_fixture.js.",
+        protocol_version: 3,
         scenario: Object.fromEntries(Object.entries(SCENARIO).map(([k, v]) => [k, dec(v)])),
+        medication_list: {
+            _note: "TEST DATA: illustrative placeholder codes, not checked against SNOMED CT. Also in testdata/kat/medication_list.json.",
+            items: MEDICATION_LIST,
+            encoding_bytes: meds.encode(MEDICATION_LIST).length,
+            digest_D: hex(SCENARIO.medication_digest),
+            altered_list_digest: hex(alteredD),
+        },
         registry: {
             depth: DEPTH,
             doctors: doctors.map((d, i) => ({
@@ -383,11 +418,12 @@ async function main() {
             },
         },
         expected_public_outputs: Object.fromEntries(positives.map((v) => {
-            const Cv = p2.H1(v.w.prescription_id, v.w.doctor_id, v.w.medicine_code, v.w.expiry, v.w.threshold, p2.H2(v.w.patient_secret));
+            const Cv = p2.H1(v.w.prescription_id, v.w.doctor_id, v.w.medication_digest, v.w.expiry, v.w.threshold, p2.H2(v.w.patient_secret));
             return [v.id, {
                 description: v.desc,
                 commitment: hex(Cv),
                 nullifier: hex(p2.H3(v.w.patient_secret, Cv, v.w.slot_index)),
+                medication_digest: hex(v.w.medication_digest),
                 current_date: dec(v.w.current_date),
                 registry_root: hex(v.w.root),
             }];
@@ -407,7 +443,9 @@ async function main() {
         ],
     };
     write("testdata/kat/canonical_fixture.json", JSON.stringify(fixture, null, 2) + "\n");
+    write("testdata/kat/medication_list.json", JSON.stringify(MEDICATION_LIST, null, 2) + "\n");
 
+    console.log("medication list D :", hex(SCENARIO.medication_digest));
     console.log("commitment C      :", hex(C));
     console.log("registry root     :", hex(root));
     console.log("nullifier (slot 0):", hex(N(0n)));

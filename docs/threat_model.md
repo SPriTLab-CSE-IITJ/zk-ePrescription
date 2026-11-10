@@ -39,7 +39,11 @@ electronic prescriptions.
 
 ### Pharmacy
 
-The pharmacy verifies the prescription and its redemption conditions.
+The pharmacy verifies the prescription and its redemption conditions and,
+after verification, sees the medication list it must dispense (code, name,
+dosage, quantity), bound to the doctor's signature through the digest D
+(protocol v3). It does not learn the patient, the doctor, the prescription
+identifier, the expiry or the refill limit.
 
 ### ZK Prover
 
@@ -108,14 +112,17 @@ The threat model assumes:
    the registry authority and the date from its own trusted clock; neither is
    taken from the redemption QR.
 8. The verification key and circuit version are pinned in the pharmacy
-   software.
+   software, and the pharmacy dispenses only a medication list whose digest
+   equals the D output by the verified proof.
 9. The notification mechanism (application layer, not implemented here)
    reliably reports redemptions to the patient. It provides detection, not
    prevention.
 
-Assumptions 6-9 are environmental: the circuits cannot establish them, and
-this artifact does not implement them (docs/protocol_specification.md,
-Section 26). Which registry roots are acceptable is an open decision (D4).
+Assumptions 6-9 are environmental: the circuits cannot establish them
+(docs/protocol_specification.md, Section 26). The pharmacy-side checks of
+assumptions 7 and 8 are implemented by `scripts/pharmacy_verify.js`; the
+shared atomic service of assumption 6 is simulated in memory, and the
+notification of assumption 9 is not implemented. Which registry roots are acceptable is an open decision (D4).
 
 The ZK circuit does not itself authenticate the national health-identity
 authority.
@@ -156,7 +163,7 @@ commitment, so a copy of the issuance record cannot be redeemed under another
 secret, and the same prescription cannot be given fresh nullifiers.
 
 Producing a redemption proof requires the patient's credential (the secret).
-Presenting it does not: the redemption QR (proof, C, N) is a transferable
+Presenting it does not: the redemption QR (proof, C, N, D and the medication list) is a transferable
 bearer token for one slot on the date bound into it. The patient may generate
 it and give it to a family member or authorized representative, who redeems
 without learning s_P. Therefore:
@@ -229,12 +236,17 @@ verification while allowing the verifier to establish:
 
     N = Nullifier(s_P, C, slotIndex)
 
-The external application may expose the information required for prescription
-dispensing, but such application-level disclosure is distinct from the
-private ZK witness.
+    D = digest of the medication list inside C (public output)
 
-The prototype does not require the bearer to manually enumerate medicine
-codes as ZK proof inputs.
+The one deliberate disclosure is the medication list itself, which the
+pharmacist needs in order to dispense. Since protocol v3 it is bound to the
+proof: the app sends the list in clear, the pharmacy recomputes its digest and
+shows the list only if it equals the D output by the verified proof. A
+changed, added, removed or swapped medicine therefore cannot be dispensed.
+The rest of the prescription (patient, doctor, prescription identifier,
+expiry, refill limit, refill index) stays in the private witness. The list
+can still hint at a condition or link prescriptions with an unusual
+combination of medicines; this is inherent in dispensing.
 
 ---
 
@@ -424,7 +436,9 @@ The bearer-redemption model is explicit:
 is permitted, provided the presenter holds a redemption QR generated with the
 patient's secret (or the secret itself).
 
-Verifiers (pharmacies and the redemption service) see C and N but never I;
+Verifiers (pharmacies and the redemption service) see C and N but never I
+(pharmacies also see the medication list and its digest D, which they need to
+dispense);
 issuing doctors know I and are outside this game's privacy goal. Colluding
 issuers can correlate a patient's prescriptions through the stable I
 (decision D3).
@@ -461,10 +475,10 @@ The protocol separates the following properties:
 
 5. Witness privacy / minimal disclosure:
 
-       Full prescription remains in the private witness.
+       Everything except the medication list remains in the private witness.
 
-       Only information deliberately exposed by the protocol/application
-       is revealed to the verifier.
+       The medication list is disclosed to the pharmacy and bound to the
+       signed C through D (protocol v3).
 
 6. Policy enforcement:
 

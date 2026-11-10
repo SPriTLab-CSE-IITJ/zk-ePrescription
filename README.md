@@ -5,7 +5,8 @@
 A patient proves to a pharmacy that a prescription was signed by a registered
 doctor for them, has not been altered, has not expired and has redemptions
 left, without revealing their secret, the doctor's identity or the
-prescription fields. The same normative protocol
+prescription details; after verification the pharmacist sees only the
+doctor-signed list of medicines to dispense. The same normative protocol
 ([`docs/protocol_specification.md`](docs/protocol_specification.md)) is
 implemented twice:
 
@@ -16,13 +17,21 @@ implemented twice:
 
 Research artifact; not audited and not for clinical use.
 
-> **Protocol v2.** The commitment now includes the patient reference
+> **Protocol v3.** The commitment contains the digest `D` of the prescription's
+> medication list (code, name, dosage, quantity per medicine), and the proof
+> outputs `D`. The patient's app sends the list; the pharmacy shows it only if
+> it hashes to `D` (`scripts/pharmacy_verify.js`), so the pharmacist learns
+> exactly what to dispense and a changed list is rejected. In v2 the medicine
+> was a private input and the pharmacist learned nothing about it. The v2
+> vectors are in `testdata/historical/v2/`.
+>
+> **Protocol v2.** The commitment includes the patient reference
 > `I = H2(patient_secret)`, so the doctor's signature binds each prescription
 > to the patient's secret. In v1 (commit `f257cad`) a holder of a valid
 > issuance record could redeem it under any other secret and obtain fresh
 > nullifiers, so the refill limit was not enforced; the new attack vectors
 > NT-021 and NT-022 cover this. The benchmark numbers below were measured on
-> v1 and are being re-measured for v2.
+> v1 and are being re-measured on the current version.
 
 ---
 
@@ -137,11 +146,12 @@ the nullifier store, cross-backend equality) and ends with:
 SUMMARY                                   Circom / Groth16    Noir / UltraHonk
   valid redemptions (outputs = fixture)    5/5                 5/5
   proofs generated and verified            5/5                 5/5
-  attack vectors rejected                  24/24               24/24
-  tampered public inputs rejected          4/4                 20/20
+  attack vectors rejected                  25/25               25/25
+  tampered public inputs rejected          5/5                 25/25
   Schnorr verifier vectors                 8/8                 8/8
   I and secret not public (redemptions)    5/5                 5/5
-  circuit size (native units)              12648 R1CS          16686 ACIR opcodes
+  pharmacy view (signed list only)         8/8                 8/8
+  circuit size (native units)              12648 R1CS          16687 ACIR opcodes
   library tests (Noir)                     7/7
   nullifier store (replays rejected)       6/6 steps as expected
   cross-backend KAT                        100/100 equal
@@ -151,7 +161,9 @@ RESULT: ALL REGRESSION TESTS PASSED
 
 The attack table names, for every vector, what the attacker changed and which
 check rejected it in each backend (signature, registry, expiry,
-slot < threshold, s < l bound, point on curve, binary direction).
+slot < threshold, s < l bound, point on curve, binary direction). The
+pharmacist's view of the canonical prescription is written to
+`results/pharmacy_view_circom.txt` and `results/pharmacy_view_noir.txt`.
 [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md) explains each line.
 
 ### E3: benchmark (claim C3)
@@ -188,8 +200,9 @@ Raspberry Pi 5: without it the board throttles, as in the published run.
 ## Protocol in brief
 
 ```text
+D  = H7(medication list)                                                medication-list digest, public
 I  = H2(patient_secret)                                                 patient reference, private
-C  = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I) commitment, public; signed
+C  = H1(prescription_id, doctor_id, D, expiry, threshold, I)             commitment, public; signed
 N  = H3(patient_secret, C, slot_index)                                  nullifier, public
 L  = H4(doctor_id, PKx, PKy),  M = H5(left, right)                      doctor registry (Merkle)
 c  = Hraw(Rx, Ry, PKx, PKy, C);  s*B8 = R + 8*c*PK,  s < l             Schnorr on Baby Jubjub
@@ -197,9 +210,12 @@ current_date <= expiry,  slot_index < threshold                         policy (
 ```
 
 Poseidon2 over the BN254 scalar field (t = 4, rate 3, x^5, 8 + 56 + 8 rounds);
-`H1`–`H5` prepend domain tags 1–5 (tag 6, the v1 issuance binding, is retired).
-Public inputs: registry root and `current_date`; public outputs: `C` and `N`.
-Everything else, including `I`, is private. Because the doctor signs `C` and
+`H1`–`H5` prepend domain tags 1–5 (tag 6, the v1 issuance binding, is retired);
+`H7`, computed off-circuit by the doctor's software and the pharmacy, hashes the
+canonical encoding of the medication list.
+Public inputs: registry root and `current_date`; public outputs: `C`, `N` and `D`.
+Everything else, including `I`, is private. The pharmacy sees the medication
+list itself, checked against `D`. Because the doctor signs `C` and
 `C` contains `I`, only the holder of `patient_secret` can redeem, and each
 refill slot has exactly one nullifier.
 
@@ -212,14 +228,18 @@ refill slot has exactly one nullifier.
 - The circuit only derives `N`; single-use redemption needs one redemption
   service, shared by all pharmacies, that checks and stores accepted
   nullifiers atomically. The guarantee is one redemption per slot, at most
-  `threshold` per prescription. Neither that service nor patient notification
-  is implemented here.
+  `threshold` per prescription; every redemption dispenses the whole
+  medication list. Neither that service nor patient notification is
+  implemented here (the service is simulated in memory).
 - A redemption QR is a transferable bearer token for one slot on one date: a
   relative can collect the medicine with it, and a stolen or relayed QR is not
   prevented from being used first (only detectable through notification).
 - The pharmacy must take the registry root from an authenticated source, the
   date from its own clock and the verification key from its own software; the
   circuits cannot check this ([`docs/protocol_specification.md`](docs/protocol_specification.md), Sections 26-27).
+- The pharmacist sees the medication list, which can hint at a condition;
+  that is the minimum needed to dispense. The codes in the test list are
+  illustrative placeholders, not checked against SNOMED CT.
 - `C` and `N` are public, so redemptions of one prescription are linkable. No
   anonymity, unlinkability or collusion-resistance claim is made; see
   [`docs/threat_model.md`](docs/threat_model.md). There is no formal security proof.
@@ -233,16 +253,17 @@ refill slot has exactly one nullifier.
 ```text
 circom/circuits/     redemption.circom (entry), lib_modules, registry, schnorr_bjj,
                      poseidon2(+constants), kat/ harnesses
-circom/inputs/       TV-001..005 and NT-001..024 vectors, Schnorr unit vectors
+circom/inputs/       TV-001..005 and NT-001..025 vectors, Schnorr unit vectors
 circom/scripts/      build_canonical_fixture.js (generates every vector), lib/ JS reference
 noir/common/         Poseidon2 sponge and H1-H5 (the only Poseidon2 source in Noir)
 noir/redemption/     redemption circuit (entry), tests/positive, tests/negative
 noir/kat/, noir/registry_generator/
-scripts/             run.sh (container entry point), test.sh, demo.sh, suites, kat/
+scripts/             run.sh (container entry point), test.sh, demo.sh, suites, kat/,
+                     pharmacy_verify.js (pharmacist's view), lib/medication_list.js
 bench/               run_device.sh (one-command run), benchmark harness v1.4.2
 docs/                specification, threat model, architecture, toolchain, results
-testdata/kat/        canonical fixture and KAT reference vectors
-testdata/historical/ pre-alignment and protocol-v1 vectors, kept for provenance only
+testdata/kat/        canonical fixture, medication list and KAT reference vectors
+testdata/historical/ pre-alignment, protocol-v1 and protocol-v2 vectors, kept for provenance only
 ```
 
 [`docs/architecture.md`](docs/architecture.md) describes every file and how the

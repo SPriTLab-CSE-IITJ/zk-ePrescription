@@ -48,7 +48,7 @@ WARMUP="${WARMUP:-1}"
 REPS="${REPS:-5}"
 COMPILE_REPS="${COMPILE_REPS:-3}"
 EXPECTED_IMAGE_ID="${EXPECTED_IMAGE_ID:-any}"
-EXP_R1CS=12648; EXP_ACIR=16686; EXP_GATES=22259   # protocol v2
+EXP_R1CS=12648; EXP_ACIR=16687; EXP_GATES=22261   # protocol v3 (v2: 12648 / 16686 / 22259)
 BASE_IMAGE="${IMAGE:-zkep}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${BENCH_OUT:-$REPO/results/bench}/${LABEL}_${TS}"; [ "$MODE" = "--plan" ] && OUT="${OUT}_plan"
@@ -235,7 +235,7 @@ fi
   echo "  input hashes inside the image != this checkout"
   echo "  R1CS / ACIR / gate count != expected"
   echo "  any Circom public.json or Noir public_inputs != fixture TV-001 (read from canonical_fixture.json)"
-  echo "  any nargo execute output != [C, N] of fixture TV-001"
+  echo "  any nargo execute output != [C, N, D] of fixture TV-001"
   echo "  any Groth16 verify without OK!, any bb verify without 'verified successfully'"
   echo
   echo "POST-RUN VALIDATION (validation.json)"

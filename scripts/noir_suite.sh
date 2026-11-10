@@ -11,6 +11,11 @@
 # the Barretenberg CRS); the run is then reported as INCOMPLETE, never as PASS.
 set -euo pipefail
 
+# Zero-knowledge UltraHonk variant for every bb call (bb 5.x: noir-recursive =
+# Poseidon2 transcript, ZK; the *-no-zk targets are not ZK).
+BB_TARGET="${BB_TARGET:-noir-recursive}"
+export BB_TARGET
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG="${ZKEP_RESULTS:-$REPO/results}/logs/noir.log"
 # shellcheck source=lib/report.sh
@@ -50,7 +55,7 @@ record noir_acir_opcodes "$OPCODES"
 ok "compile noir/$PKG" "$OPCODES ACIR opcodes"
 
 if [ "$SKIP_BB" != "1" ]; then
-    (cd "$PKG_ROOT" && bb write_vk -b "target/$PKG.json" -o target) >>"$LOG" 2>&1 \
+    (cd "$PKG_ROOT" && bb write_vk -t "$BB_TARGET" -b "target/$PKG.json" -o target) >>"$LOG" 2>&1 \
         || fail "UltraHonk verification key" "bb write_vk failed (CRS download?)"
 fi
 
@@ -69,24 +74,24 @@ const id = process.argv[2];
 const m = process.argv[3].match(/Circuit output: \[([^\]]*)\]/);
 if (!m) { console.log(`${id}: no circuit output`); process.exit(1); }
 const hex = (x) => "0x" + BigInt(x.trim()).toString(16).padStart(64, "0");
-const [c, n] = m[1].split(",").map(hex);
+const [c, n, d] = m[1].split(",").map(hex);
 const e = fx.expected_public_outputs[id];
-console.log(`${id} C=${c} N=${n}`);
-if (c !== e.commitment || n !== e.nullifier) { console.log(`expected C=${e.commitment} N=${e.nullifier}`); process.exit(1); }
-require("fs").appendFileSync(process.argv[4], [id, c, n].join("\t") + "\n");
+console.log(`${id} C=${c} N=${n} D=${d}`);
+if (c !== e.commitment || n !== e.nullifier || d !== e.medication_digest) { console.log(`expected C=${e.commitment} N=${e.nullifier} D=${e.medication_digest}`); process.exit(1); }
+require("fs").appendFileSync(process.argv[4], [id, c, n, d].join("\t") + "\n");
 ' "$FIXTURE" "$NAME" "$OUT" "$RESULTS/noir_outputs.tsv" >>"$LOG" 2>&1 || fail "valid vector $NAME" "public outputs differ from the fixture"
     nv=$((nv + 1))
 
     [ "$SKIP_BB" = "1" ] && continue
     (
         cd "$PKG_ROOT"
-        bb prove -b "target/$PKG.json" -w "target/$PKG.gz" -k target/vk -o target
-        bb verify -k target/vk -p target/proof -i target/public_inputs
+        bb prove -t "$BB_TARGET" -b "target/$PKG.json" -w "target/$PKG.gz" -k target/vk -o target
+        bb verify -t "$BB_TARGET" -k target/vk -p target/proof -i target/public_inputs
     ) >>"$LOG" 2>&1 || fail "UltraHonk proof $NAME" "prove or verify failed"
     np=$((np + 1))
 
     # Tampered public inputs: last byte of each 32-byte public input
-    # incremented in turn (registry_root, current_date, C, N) must not verify.
+    # incremented in turn (registry_root, current_date, C, N, D) must not verify.
     (
         cd "$PKG_ROOT"
         node -e '
@@ -103,30 +108,41 @@ fs.writeFileSync("target/public_inputs.count", String(n));
     )
     COUNT="$(cat "$PKG_ROOT/target/public_inputs.count")"
     for i in $(seq 0 $((COUNT - 1))); do
-        if (cd "$PKG_ROOT" && bb verify -k target/vk -p target/proof -i "target/public_inputs.tampered$i") >>"$LOG" 2>&1; then
+        if (cd "$PKG_ROOT" && bb verify -t "$BB_TARGET" -k target/vk -p target/proof -i "target/public_inputs.tampered$i") >>"$LOG" 2>&1; then
             fail "tampered public input $i ($NAME)" "VERIFIED"
         fi
         nt=$((nt + 1))
     done
+
+    # Pharmacy view on the real TV-001 proof: the medication list is shown
+    # only if it is the signed one (Section 6.1).
+    if [ "$NAME" = "TV-001" ]; then
+        PH="$(node "$REPO/scripts/lib/pharmacy_cases.js" noir "$PKG_ROOT/target/vk" \
+            "$PKG_ROOT/target/proof" "$PKG_ROOT/target/public_inputs" "$RESULTS" 2>&1)" \
+            || { cat "$RESULTS/logs/pharmacy_noir.log" >>"$LOG" 2>/dev/null; fail "pharmacy view (Noir)" "$PH"; }
+    fi
 done
 record noir_valid "$nv"
 ok "valid vectors TV-001..$(printf '%03d' "$nv")" "$nv/$nv executed, outputs = fixture"
 
-# --- public values: only root, date, C, N (I and the secret never public) ----
+# --- public values: only root, date, C, N, D (I and the secret never public) -
 PUBCHK="$(node "$REPO/scripts/lib/public_values_check.js" noir "$PKG_ROOT/target/$PKG.json" "$RESULTS/noir_outputs.tsv" 2>&1)" \
     || { echo "$PUBCHK" >>"$LOG"; fail "public values (Noir)" "$PUBCHK"; }
 echo "$PUBCHK" >>"$LOG"
 record noir_public "${PUBCHK%% redemptions*}/$nv"
-ok "public values: root, date, C, N only" "I not public in ${PUBCHK%% redemptions*}/$nv executions"
+ok "public values: root, date, C, N, D only" "I not public in ${PUBCHK%% redemptions*}/$nv executions"
 if [ "$SKIP_BB" = "1" ]; then
     record noir_proofs "skipped"
     record noir_tampered "skipped"
+    record noir_pharmacy "skipped"
     item "UltraHonk prove + verify" "SKIPPED (ZKEP_SKIP_BB=1)"
 else
     record noir_proofs "$np/$nv"
     record noir_tampered "$nt/$nt"
     ok "UltraHonk prove + verify TV-001..$(printf '%03d' "$nv")" "$np/$nv proofs verified"
     ok "tampered public inputs ($((nt / nv)) per proof x $nv)" "$nt/$nt rejected"
+    record noir_pharmacy "${PH%% as expected}"
+    ok "pharmacy view: signed list shown, altered lists rejected" "${PH} (results/pharmacy_view_noir.txt)"
 fi
 
 # --- attack vectors ----------------------------------------------------------

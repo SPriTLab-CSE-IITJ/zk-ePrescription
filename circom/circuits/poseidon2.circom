@@ -153,7 +153,7 @@ template Poseidon2Tagged(DOMAIN, K) {
 template H1Commitment() {
     signal input prescription_id;
     signal input doctor_id;
-    signal input medicine_code;
+    signal input medication_digest;
     signal input expiry;
     signal input threshold;
     signal input identity;
@@ -162,7 +162,7 @@ template H1Commitment() {
     component h = Poseidon2Tagged(1, 6);
     h.in[0] <== prescription_id;
     h.in[1] <== doctor_id;
-    h.in[2] <== medicine_code;
+    h.in[2] <== medication_digest;
     h.in[3] <== expiry;
     h.in[4] <== threshold;
     h.in[5] <== identity;

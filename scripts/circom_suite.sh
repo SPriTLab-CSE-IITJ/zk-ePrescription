@@ -50,10 +50,10 @@ const fx = require(process.argv[1]);
 const w = require(process.argv[2]);
 const e = fx.expected_public_outputs[process.argv[3]];
 const hex = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
-// witness layout: [1, commitment_out, nullifier_out, current_date, root, ...]
-const got = { commitment: hex(w[1]), nullifier: hex(w[2]), current_date: BigInt(w[3]).toString(), registry_root: hex(w[4]) };
+// witness layout: [1, commitment_out, nullifier_out, medication_digest_out, current_date, root, ...]
+const got = { commitment: hex(w[1]), nullifier: hex(w[2]), medication_digest: hex(w[3]), current_date: BigInt(w[4]).toString(), registry_root: hex(w[5]) };
 let ok = true;
-for (const k of ["commitment", "nullifier", "current_date", "registry_root"])
+for (const k of ["commitment", "nullifier", "medication_digest", "current_date", "registry_root"])
   if (got[k] !== e[k]) { ok = false; console.log(`${process.argv[3]} MISMATCH ${k}: got ${got[k]} expected ${e[k]}`); }
 console.log(`${process.argv[3]} C=${got.commitment} N=${got.nullifier}`);
 process.exit(ok ? 0 : 1);
@@ -70,7 +70,7 @@ for input in "$VEC"/TV-*.json; do
     quiet "$SNARKJS" wtns export json "$TMP/$id.wtns" "$TMP/$id.wtns.json"
     check_outputs "$id" "$TMP/$id.wtns.json" || fail "valid vector $id" "public outputs differ from the fixture"
     node -e 'const w = require(process.argv[1]); const h = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
-console.log([process.argv[2], h(w[1]), h(w[2])].join("\t"));' "$TMP/$id.wtns.json" "$id" >>"$RESULTS/circom_outputs.tsv"
+console.log([process.argv[2], h(w[1]), h(w[2]), h(w[3])].join("\t"));' "$TMP/$id.wtns.json" "$id" >>"$RESULTS/circom_outputs.tsv"
     n=$((n + 1))
 done
 record circom_valid "$n"
@@ -145,16 +145,16 @@ done
 record circom_proofs "$n/$n"
 ok "Groth16 prove + verify TV-001..$(printf '%03d' "$n")" "$n/$n proofs verified"
 
-# --- public values: only root, date, C, N (I and the secret never public) ----
+# --- public values: only root, date, C, N, D (I and the secret never public) -
 PUBCHK="$(node "$REPO/scripts/lib/public_values_check.js" circom "$TMP/r1cs_info.txt" "$TMP"/TV-*.public.json 2>&1)" \
     || { echo "$PUBCHK" >>"$LOG"; fail "public values (Circom)" "$PUBCHK"; }
 echo "$PUBCHK" >>"$LOG"
 record circom_public "${PUBCHK%% redemptions*}/$n"
-ok "public values: root, date, C, N only" "I not public in ${PUBCHK%% redemptions*}/$n proofs"
+ok "public values: root, date, C, N, D only" "I not public in ${PUBCHK%% redemptions*}/$n proofs"
 
 # --- tampered public signals -------------------------------------------------
 id=TV-001
-for idx in 0 1 2 3; do
+for idx in 0 1 2 3 4; do
     node -e '
 const fs = require("fs");
 const p = JSON.parse(fs.readFileSync(process.argv[1]));
@@ -168,5 +168,12 @@ fs.writeFileSync(process.argv[3], JSON.stringify(p));
         fail "tampered public signal [$idx]" "VERIFIED"
     fi
 done
-record circom_tampered "4/4"
-ok "tampered public signals (C, N, date, root)" "4/4 rejected"
+record circom_tampered "5/5"
+ok "tampered public signals (C, N, D, date, root)" "5/5 rejected"
+
+# --- pharmacy view: medication list shown only if it is the signed one -------
+PH="$(node "$REPO/scripts/lib/pharmacy_cases.js" circom "$TMP/verification_key.json" \
+    "$TMP/TV-001.proof.json" "$TMP/TV-001.public.json" "$RESULTS" 2>&1)" \
+    || { cat "$RESULTS/logs/pharmacy_circom.log" >>"$LOG" 2>/dev/null; fail "pharmacy view (Circom)" "$PH"; }
+record circom_pharmacy "${PH%% as expected}"
+ok "pharmacy view: signed list shown, altered lists rejected" "${PH} (results/pharmacy_view_circom.txt)"

@@ -28,3 +28,22 @@ Section 6, and the new attack vectors NT-021 and NT-022.
 - `v1/noir/`: positive and negative `.toml` vectors
 
 Kept byte-identical to commit `b92dd82`; no test uses them.
+
+## Protocol v2 (`v2/`)
+
+The vectors, fixture and cross-backend KAT results of protocol v2 (merged as
+`9387341`, with the v2 test completion NT-023/NT-024). In v2 the commitment
+was `C = H1(pid, did, medicine_code, expiry, threshold, I)` with a single
+private medicine code, and the redemption outputs were `[C, N]`, so the
+pharmacy learned nothing about the medicine from the proof. Protocol v3
+replaces the medicine code by the medication-list digest `D` and outputs it
+(`docs/protocol_specification.md`, Section 6.1); NT-025 checks that the
+doctor's real v2 signature is rejected for the v3 commitment.
+
+- `v2/kat/`: `canonical_fixture.json`, `cross_backend_kat_results.json` (100/100 equal)
+- `v2/circom/`: TV-001..005, NT-001..024
+- `v2/noir/`: positive and negative `.toml` vectors
+
+Kept byte-identical to the v2 state; no test uses them, except that the
+fixture generator reads `v2/kat/canonical_fixture.json` to check the v2
+signature used by NT-025 (and `v1/kat/canonical_fixture.json` for NT-023).

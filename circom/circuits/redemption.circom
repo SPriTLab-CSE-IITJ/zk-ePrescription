@@ -2,11 +2,14 @@ pragma circom 2.1.6;
 
 // Integrated Phase-4 redemption circuit (Circom / Groth16).
 // Implements the Phase-4 redemption statement of
-// docs/protocol_specification.md (Section 16, protocol v2), identical in
+// docs/protocol_specification.md (Section 16, protocol v3), identical in
 // logic to noir/redemption. The patient secret is bound to the signed
-// commitment through I = H2(patient_secret).
+// commitment through I = H2(patient_secret); the medication-list digest D
+// is part of the signed commitment and a public output, so the pharmacy can
+// check the medication list it is shown (Section 6.1).
 //
-// Public signals (snarkjs order): [commitment_out, nullifier_out, current_date, root]
+// Public signals (snarkjs order):
+//   [commitment_out, nullifier_out, medication_digest_out, current_date, root]
 
 include "lib_modules.circom";
 
@@ -14,7 +17,7 @@ template EPrescriptionMain(DEPTH) {
     // Prescription
     signal input prescription_id;
     signal input doctor_id;
-    signal input medicine_code;
+    signal input medication_digest;   // D = digest of the medication list (public output)
     signal input expiry;
     signal input threshold;
 
@@ -39,20 +42,22 @@ template EPrescriptionMain(DEPTH) {
 
     signal output commitment_out;
     signal output nullifier_out;
+    signal output medication_digest_out;
 
     // 1. Patient reference I = H2(patient_secret) (private) and
-    //    commitment C = H1(pid, did, med, expiry, threshold, I)
+    //    commitment C = H1(pid, did, D, expiry, threshold, I); D is also output
     component identity = IdentityBinding();
     identity.patient_secret <== patient_secret;
 
     component commitment = Commitment();
     commitment.prescription_id <== prescription_id;
     commitment.doctor_id <== doctor_id;
-    commitment.medicine_code <== medicine_code;
+    commitment.medication_digest <== medication_digest;
     commitment.expiry <== expiry;
     commitment.threshold <== threshold;
     commitment.identity <== identity.identity_ref;
     commitment_out <== commitment.commitment;
+    medication_digest_out <== medication_digest;
 
     // 2. Policy
     component threshold_check = ThresholdCheck();

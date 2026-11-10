@@ -13,7 +13,7 @@ template KatHashes() {
 
     signal input prescription_id;
     signal input doctor_id;
-    signal input medicine_code;
+    signal input medication_digest;
     signal input expiry;
     signal input threshold;
     signal input patient_secret;
@@ -50,7 +50,7 @@ template KatHashes() {
     component c = H1Commitment();
     c.prescription_id <== prescription_id;
     c.doctor_id <== doctor_id;
-    c.medicine_code <== medicine_code;
+    c.medication_digest <== medication_digest;
     c.expiry <== expiry;
     c.threshold <== threshold;
     c.identity <== id.out;

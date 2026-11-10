@@ -35,7 +35,7 @@ step "4/5" "Nullifier store: each refill slot accepted once, replays rejected"
 if node "$REPO/scripts/lib/nullifier_store.js" "$REPO" "$RESULTS" >"$RESULTS/logs/nullifier_store.log" 2>&1; then
     sed -n 's/^\(circom\|noir\): \([0-9]*\/[0-9]*\) steps as expected$/\1 \2/p' "$RESULTS/logs/nullifier_store.log" \
         | while read -r b r; do ok "nullifier store ($b outputs)" "$r steps as expected"; done
-    ok "same C and N in both backends" "$(sed -n 's/^same C and N in both backends: //p' "$RESULTS/logs/nullifier_store.log")"
+    ok "same C, N and D in both backends" "$(sed -n 's/^same C, N and D in both backends: //p' "$RESULTS/logs/nullifier_store.log")"
     record store_steps "$(sed -n 's/^circom: \([0-9]*\/[0-9]*\) steps as expected$/\1/p' "$RESULTS/logs/nullifier_store.log")"
 else
     cat "$RESULTS/logs/nullifier_store.log"
@@ -57,6 +57,7 @@ ELAPSED=$(( $(date +%s) - START ))
     printf '  %-40s %-19s %s\n' "tampered public inputs rejected" "$circom_tampered" "$noir_tampered"
     printf '  %-40s %-19s %s\n' "Schnorr verifier vectors" "$circom_schnorr" "$noir_schnorr"
     printf '  %-40s %-19s %s\n' "I and secret not public (redemptions)" "$circom_public" "$noir_public"
+    printf '  %-40s %-19s %s\n' "pharmacy view (signed list only)" "$circom_pharmacy" "$noir_pharmacy"
     printf '  %-40s %-19s %s\n' "circuit size (native units)" "$circom_constraints R1CS" "$noir_acir_opcodes ACIR opcodes"
     printf '  %-40s %s\n' "library tests (Noir)" "$noir_common"
     printf '  %-40s %s\n' "nullifier store (replays rejected)" "$store_steps steps as expected"

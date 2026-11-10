@@ -20,7 +20,7 @@
           "7"
         ],
         "prescription_id": "1001",
-        "medicine_code": "123",
+        "medication_digest": "21468779016902851287398080263382775250719337278054731086605272114305389568864",
         "expiry": "20261231",
         "threshold": "3",
         "patient_secret": "12345",
@@ -115,9 +115,9 @@
         },
         {
           "construction": "H1 commitment C",
-          "expected_js": "0x1858ba4c0898b61f8b72975576b17bffd22f7d24f9d9e6fc90a43073e2d44437",
-          "circom": "0x1858ba4c0898b61f8b72975576b17bffd22f7d24f9d9e6fc90a43073e2d44437",
-          "noir": "0x1858ba4c0898b61f8b72975576b17bffd22f7d24f9d9e6fc90a43073e2d44437",
+          "expected_js": "0x0c0dcdd6a41f85ba95410e634862efec73514fc511bbe4ea9f0dcc8f655b65a7",
+          "circom": "0x0c0dcdd6a41f85ba95410e634862efec73514fc511bbe4ea9f0dcc8f655b65a7",
+          "noir": "0x0c0dcdd6a41f85ba95410e634862efec73514fc511bbe4ea9f0dcc8f655b65a7",
           "equal": true
         },
         {
@@ -129,9 +129,9 @@
         },
         {
           "construction": "H3 nullifier N",
-          "expected_js": "0x0e51d2032394862ca54cefdf014042d90fad649832db445f0d9214f603aef3c3",
-          "circom": "0x0e51d2032394862ca54cefdf014042d90fad649832db445f0d9214f603aef3c3",
-          "noir": "0x0e51d2032394862ca54cefdf014042d90fad649832db445f0d9214f603aef3c3",
+          "expected_js": "0x0fb1b94c01543fbbc96497ec32298beba60133c67029e31c2400e7fee001b8c6",
+          "circom": "0x0fb1b94c01543fbbc96497ec32298beba60133c67029e31c2400e7fee001b8c6",
+          "noir": "0x0fb1b94c01543fbbc96497ec32298beba60133c67029e31c2400e7fee001b8c6",
           "equal": true
         },
         {
@@ -168,7 +168,7 @@
           "106"
         ],
         "prescription_id": "1001",
-        "medicine_code": "123",
+        "medication_digest": "21468779016902851287398080263382775250719337278054731086605272114305389568864",
         "expiry": "20261231",
         "threshold": "3",
         "patient_secret": "12345",
@@ -263,9 +263,9 @@
         },
         {
           "construction": "H1 commitment C",
-          "expected_js": "0x30245b5d28a12c5ade6ca8289c4f85caa7111b1be8c8867ca8965aeef304241b",
-          "circom": "0x30245b5d28a12c5ade6ca8289c4f85caa7111b1be8c8867ca8965aeef304241b",
-          "noir": "0x30245b5d28a12c5ade6ca8289c4f85caa7111b1be8c8867ca8965aeef304241b",
+          "expected_js": "0x089512d69455ac32d82f44201902ffecd99cbcbc8fa94e87c7575a6d50ba3573",
+          "circom": "0x089512d69455ac32d82f44201902ffecd99cbcbc8fa94e87c7575a6d50ba3573",
+          "noir": "0x089512d69455ac32d82f44201902ffecd99cbcbc8fa94e87c7575a6d50ba3573",
           "equal": true
         },
         {
@@ -277,9 +277,9 @@
         },
         {
           "construction": "H3 nullifier N",
-          "expected_js": "0x0c6bcf2b8359402f923d9e49aef6d90b17b8d1d4e081ed20c666594b764d0a01",
-          "circom": "0x0c6bcf2b8359402f923d9e49aef6d90b17b8d1d4e081ed20c666594b764d0a01",
-          "noir": "0x0c6bcf2b8359402f923d9e49aef6d90b17b8d1d4e081ed20c666594b764d0a01",
+          "expected_js": "0x04cfea978cd70702d0e4a32cff2529cc0ae066865564aebdf3a67fa631a32c09",
+          "circom": "0x04cfea978cd70702d0e4a32cff2529cc0ae066865564aebdf3a67fa631a32c09",
+          "noir": "0x04cfea978cd70702d0e4a32cff2529cc0ae066865564aebdf3a67fa631a32c09",
           "equal": true
         },
         {
@@ -316,7 +316,7 @@
           "1006"
         ],
         "prescription_id": "1001",
-        "medicine_code": "123",
+        "medication_digest": "21468779016902851287398080263382775250719337278054731086605272114305389568864",
         "expiry": "20261231",
         "threshold": "3",
         "patient_secret": "12345",
@@ -411,9 +411,9 @@
         },
         {
           "construction": "H1 commitment C",
-          "expected_js": "0x2e596d1ede8045a856f5b5a3ca03ce3f2a206a90eb603b940ec16eed287e189b",
-          "circom": "0x2e596d1ede8045a856f5b5a3ca03ce3f2a206a90eb603b940ec16eed287e189b",
-          "noir": "0x2e596d1ede8045a856f5b5a3ca03ce3f2a206a90eb603b940ec16eed287e189b",
+          "expected_js": "0x2797bb12d13429533cfd373640bb83b22679cd5f32742e4180feae67897a376a",
+          "circom": "0x2797bb12d13429533cfd373640bb83b22679cd5f32742e4180feae67897a376a",
+          "noir": "0x2797bb12d13429533cfd373640bb83b22679cd5f32742e4180feae67897a376a",
           "equal": true
         },
         {
@@ -425,9 +425,9 @@
         },
         {
           "construction": "H3 nullifier N",
-          "expected_js": "0x1b8da8296a8b9700c87c236980980308ef1b2dbd8914d6cdac1c585d6ef7e75c",
-          "circom": "0x1b8da8296a8b9700c87c236980980308ef1b2dbd8914d6cdac1c585d6ef7e75c",
-          "noir": "0x1b8da8296a8b9700c87c236980980308ef1b2dbd8914d6cdac1c585d6ef7e75c",
+          "expected_js": "0x2026c51dcd593053d7b2570bd41785b71128e1e4225647f6ba7b10fefa7045eb",
+          "circom": "0x2026c51dcd593053d7b2570bd41785b71128e1e4225647f6ba7b10fefa7045eb",
+          "noir": "0x2026c51dcd593053d7b2570bd41785b71128e1e4225647f6ba7b10fefa7045eb",
           "equal": true
         },
         {
@@ -464,7 +464,7 @@
           "123456795"
         ],
         "prescription_id": "1001",
-        "medicine_code": "123",
+        "medication_digest": "21468779016902851287398080263382775250719337278054731086605272114305389568864",
         "expiry": "20261231",
         "threshold": "3",
         "patient_secret": "12345",
@@ -559,9 +559,9 @@
         },
         {
           "construction": "H1 commitment C",
-          "expected_js": "0x184a777ccb829b6fd6d74c6c36445bea195c5f17ae926dfab3d7efff2b84091d",
-          "circom": "0x184a777ccb829b6fd6d74c6c36445bea195c5f17ae926dfab3d7efff2b84091d",
-          "noir": "0x184a777ccb829b6fd6d74c6c36445bea195c5f17ae926dfab3d7efff2b84091d",
+          "expected_js": "0x078b078b28962d2b8884b744c00ef79958ee04b81c15f1f7c74db044c0bac179",
+          "circom": "0x078b078b28962d2b8884b744c00ef79958ee04b81c15f1f7c74db044c0bac179",
+          "noir": "0x078b078b28962d2b8884b744c00ef79958ee04b81c15f1f7c74db044c0bac179",
           "equal": true
         },
         {
@@ -573,9 +573,9 @@
         },
         {
           "construction": "H3 nullifier N",
-          "expected_js": "0x1f8a204987163e81e5a58659a130797fd7bdf19619d5cab30ecd686e476b5ece",
-          "circom": "0x1f8a204987163e81e5a58659a130797fd7bdf19619d5cab30ecd686e476b5ece",
-          "noir": "0x1f8a204987163e81e5a58659a130797fd7bdf19619d5cab30ecd686e476b5ece",
+          "expected_js": "0x0b3b2f85eec3b14923f7df72ce2c6d013e203247ec496a2ff386eefc049ac6a2",
+          "circom": "0x0b3b2f85eec3b14923f7df72ce2c6d013e203247ec496a2ff386eefc049ac6a2",
+          "noir": "0x0b3b2f85eec3b14923f7df72ce2c6d013e203247ec496a2ff386eefc049ac6a2",
           "equal": true
         },
         {
@@ -613,7 +613,7 @@
         ],
         "prescription_id": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
         "doctor_id": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
-        "medicine_code": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
+        "medication_digest": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
         "expiry": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
         "threshold": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
         "patient_secret": "0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000",
@@ -761,7 +761,7 @@
         ],
         "prescription_id": "0",
         "doctor_id": "0",
-        "medicine_code": "0",
+        "medication_digest": "0",
         "expiry": "0",
         "threshold": "0",
         "patient_secret": "0",

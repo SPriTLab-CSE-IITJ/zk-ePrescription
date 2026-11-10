@@ -21,21 +21,22 @@ for (const k of ["measured1", "measured2", "measured3", "measured4", "measured5"
     const p = path.join(OUT, `artifacts/circom/public_${k}.json`);
     if (!fs.existsSync(p)) continue;
     const pub = JSON.parse(fs.readFileSync(p, "utf8"));
-    const got = { commitment: hex(pub[0]), nullifier: hex(pub[1]), current_date: BigInt(pub[2]).toString(), registry_root: hex(pub[3]) };
-    ok(`circom public signals ${k} == fixture TV-001`, got.commitment === exp.commitment && got.nullifier === exp.nullifier &&
-        got.current_date === exp.current_date && got.registry_root === exp.registry_root, got);
+    // protocol v3: [C, N, D, current_date, root]
+    const got = { commitment: hex(pub[0]), nullifier: hex(pub[1]), medication_digest: hex(pub[2]), current_date: BigInt(pub[3]).toString(), registry_root: hex(pub[4]) };
+    ok(`circom public signals ${k} == fixture TV-001`, pub.length === 5 && got.commitment === exp.commitment && got.nullifier === exp.nullifier &&
+        got.medication_digest === exp.medication_digest && got.current_date === exp.current_date && got.registry_root === exp.registry_root, got);
 }
 
 // Noir: public_inputs = 32-byte big-endian fields in ABI order:
-//   registry_root, current_date, then return values [C, N]
+//   registry_root, current_date, then return values [C, N, D]
 const pi = path.join(OUT, "artifacts/noir/prove_measured1/public_inputs");
 if (fs.existsSync(pi)) {
     const b = fs.readFileSync(pi);
     const f = [];
     for (let i = 0; i + 32 <= b.length; i += 32) f.push("0x" + b.subarray(i, i + 32).toString("hex"));
-    const want = [exp.registry_root, hex(exp.current_date), exp.commitment, exp.nullifier];
-    ok("noir public inputs == fixture TV-001 [root, current_date, C, N]",
-        f.length === 4 && f.every((x, i) => x === want[i]), { got: f, expected: want });
+    const want = [exp.registry_root, hex(exp.current_date), exp.commitment, exp.nullifier, exp.medication_digest];
+    ok("noir public inputs == fixture TV-001 [root, current_date, C, N, D]",
+        f.length === 5 && f.every((x, i) => x === want[i]), { got: f, expected: want });
 } else ok("noir public_inputs present", false, pi);
 
 // Raw run integrity
@@ -57,24 +58,27 @@ ok("noir bb gate count parsed", Number.isInteger(n.barretenberg_circuit_size_gat
 
 // Same aligned circuit as the regression/provenance stage (informational
 // comparison against the values recorded at freeze time; a difference is a FAIL).
-// Protocol v2 (patient reference I inside C). v1: 12291 / 16681 / 22182.
-const FROZEN = { r1cs_constraints: 12648, acir_opcodes: 16686, bb_gates: 22259 };
-ok("circom constraints equal frozen v2 build (12648)", c.r1cs_constraints === FROZEN.r1cs_constraints, c.r1cs_constraints);
-ok("noir ACIR opcodes equal frozen v2 build (16686)", n.acir_opcodes_nargo_info === FROZEN.acir_opcodes, n.acir_opcodes_nargo_info);
-ok("noir bb gates equal frozen v2 build (22259)", n.barretenberg_circuit_size_gates === FROZEN.bb_gates, n.barretenberg_circuit_size_gates);
+// Protocol v3 (medication-list digest D as a public output).
+// v2: 12648 / 16686 / 22259; v1: 12291 / 16681 / 22182.
+const FROZEN = { r1cs_constraints: 12648, acir_opcodes: 16687, bb_gates: 22261 };
+ok("circom constraints equal frozen v3 build (12648)", c.r1cs_constraints === FROZEN.r1cs_constraints, c.r1cs_constraints);
+ok("noir ACIR opcodes equal frozen v3 build (16687)", n.acir_opcodes_nargo_info === FROZEN.acir_opcodes, n.acir_opcodes_nargo_info);
+ok("noir bb gates equal frozen v3 build (22261)", n.barretenberg_circuit_size_gates === FROZEN.bb_gates, n.barretenberg_circuit_size_gates);
 
 // Legacy benchmark never invoked
 const cmds = fs.readFileSync(path.join(OUT, "benchmark_commands.txt"), "utf8");
 ok("scripts/benchmark.js not invoked", !/benchmark\.js/.test(cmds), null);
 
 // Independent sanity check (NOT the source of truth): values recorded at the
-// protocol-v2 freeze (v1: C 0x2206c427..., N 0x13ffd498...).
+// protocol-v3 freeze (v2: C 0x1858ba4c..., N 0x0e51d203...; v1: C 0x2206c427..., N 0x13ffd498...).
 const SANITY = {
-    C: "0x1858ba4c0898b61f8b72975576b17bffd22f7d24f9d9e6fc90a43073e2d44437",
-    N: "0x0e51d2032394862ca54cefdf014042d90fad649832db445f0d9214f603aef3c3",
+    C: "0x0c0dcdd6a41f85ba95410e634862efec73514fc511bbe4ea9f0dcc8f655b65a7",
+    N: "0x0fb1b94c01543fbbc96497ec32298beba60133c67029e31c2400e7fee001b8c6",
+    D: "0x2f76e5f7c5bf5a9475f9ee4ced0ac7c295cd79bdbbe6fb2bb305846f6b202360",
 };
 ok("sanity: fixture TV-001 C equals value recorded at freeze", exp.commitment === SANITY.C, exp.commitment);
 ok("sanity: fixture TV-001 N equals value recorded at freeze", exp.nullifier === SANITY.N, exp.nullifier);
+ok("sanity: fixture TV-001 D equals value recorded at freeze", exp.medication_digest === SANITY.D, exp.medication_digest);
 
 // Repetition counts as approved
 const count = (b, st, kind) => raw.filter((r) => r[1] === b && r[2] === st && r[3] === kind).length;
