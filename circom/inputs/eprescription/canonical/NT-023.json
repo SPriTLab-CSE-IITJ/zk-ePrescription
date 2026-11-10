@@ -1,7 +1,7 @@
 {
   "prescription_id": "1001",
   "doctor_id": "5001",
-  "medicine_code": "123",
+  "medication_digest": "21468779016902851287398080263382775250719337278054731086605272114305389568864",
   "expiry": "20261231",
   "threshold": "3",
   "current_date": "20260630",

@@ -34,10 +34,10 @@ REPS="${REPS:-5}"
 COMPILE_REPS="${COMPILE_REPS:-3}"
 DRY_RUN="${DRY_RUN:-0}"
 TIME_BIN="${TIME_BIN:-/usr/bin/time}"
-# protocol v2 (patient reference I inside C); v1 was 12291 / 16681 / 22182
+# protocol v3 (medication-list digest D output); v2 was 12648 / 16686 / 22259, v1 12291 / 16681 / 22182
 EXP_R1CS="${EXP_R1CS:-12648}"
-EXP_ACIR="${EXP_ACIR:-16686}"
-EXP_GATES="${EXP_GATES:-22259}"
+EXP_ACIR="${EXP_ACIR:-16687}"
+EXP_GATES="${EXP_GATES:-22261}"
 STRUCT_CHECK="${STRUCT_CHECK:-0}"
 EXP_CIRCOM="${EXP_CIRCOM:-circom compiler 2.2.3}"
 EXP_SNARKJS="${EXP_SNARKJS:-snarkjs@0.7.6}"
@@ -171,30 +171,31 @@ else
 fi
 
 # Expected public outputs: read from the canonical fixture (source of truth).
-read -r FX_C FX_N FX_DATE FX_ROOT < <(node -e '
+read -r FX_C FX_N FX_D FX_DATE FX_ROOT < <(node -e '
 const e = require(process.argv[1]).expected_public_outputs["TV-001"];
-console.log(e.commitment, e.nullifier, e.current_date, e.registry_root);' "$FIXTURE")
+console.log(e.commitment, e.nullifier, e.medication_digest, e.current_date, e.registry_root);' "$FIXTURE")
 echo "fixture_TV001_C=$FX_C" >> "$OUT/container_env.txt"
 echo "fixture_TV001_N=$FX_N" >> "$OUT/container_env.txt"
-echo "== Fixture TV-001: C=$FX_C N=$FX_N current_date=$FX_DATE root=$FX_ROOT"
+echo "fixture_TV001_D=$FX_D" >> "$OUT/container_env.txt"
+echo "== Fixture TV-001: C=$FX_C N=$FX_N D=$FX_D current_date=$FX_DATE root=$FX_ROOT"
 
 # check_circom_public FILE  /  check_noir_public FILE  — STOP on mismatch
 check_circom_public() {
     node -e '
-const [f, C, N, D, R] = process.argv.slice(1);
+const [f, C, N, M, D, R] = process.argv.slice(1);
 const p = require(f); const h = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
-const ok = h(p[0]) === C && h(p[1]) === N && BigInt(p[2]).toString() === D && h(p[3]) === R;
-if (!ok) { console.error("public.json mismatch", p); process.exit(1); }' "$1" "$FX_C" "$FX_N" "$FX_DATE" "$FX_ROOT" \
+const ok = p.length === 5 && h(p[0]) === C && h(p[1]) === N && h(p[2]) === M && BigInt(p[3]).toString() === D && h(p[4]) === R;
+if (!ok) { console.error("public.json mismatch", p); process.exit(1); }' "$1" "$FX_C" "$FX_N" "$FX_D" "$FX_DATE" "$FX_ROOT" \
         || die "Circom public signals in $1 inconsistent with fixture TV-001"
 }
 check_noir_public() {
     node -e '
-const fs = require("fs"); const [f, C, N, D, R] = process.argv.slice(1);
+const fs = require("fs"); const [f, C, N, M, D, R] = process.argv.slice(1);
 const b = fs.readFileSync(f); const x = [];
 for (let i = 0; i + 32 <= b.length; i += 32) x.push("0x" + b.subarray(i, i + 32).toString("hex"));
-const want = [R, "0x" + BigInt(D).toString(16).padStart(64, "0"), C, N];
-if (x.length !== 4 || x.some((v, i) => v !== want[i])) { console.error("public_inputs mismatch", x); process.exit(1); }' \
-        "$1" "$FX_C" "$FX_N" "$FX_DATE" "$FX_ROOT" || die "Noir public inputs in $1 inconsistent with fixture TV-001"
+const want = [R, "0x" + BigInt(D).toString(16).padStart(64, "0"), C, N, M];
+if (x.length !== 5 || x.some((v, i) => v !== want[i])) { console.error("public_inputs mismatch", x); process.exit(1); }' \
+        "$1" "$FX_C" "$FX_N" "$FX_D" "$FX_DATE" "$FX_ROOT" || die "Noir public inputs in $1 inconsistent with fixture TV-001"
 }
 
 if [ "$DRY_RUN" = "1" ] && [ "$STRUCT_CHECK" = "1" ]; then
@@ -314,19 +315,19 @@ repeat noir execute "$REPS" "$PKG/target/w_{i}.gz" -- nargo execute --prover-nam
 if live; then
     cp "$PKG/target/w_measured1.gz" "$N/witness.gz"
     for f in "$L"/noir.execute.*.out; do
-        grep -q "Circuit output: \[$FX_C, $FX_N\]" "$f" || die "nargo execute output inconsistent with fixture ($f)"
+        grep -q "Circuit output: \[$FX_C, $FX_N, $FX_D\]" "$f" || die "nargo execute output inconsistent with fixture ($f)"
     done
-    echo "   all nargo execute outputs = [C, N] of fixture TV-001"
+    echo "   all nargo execute outputs = [C, N, D] of fixture TV-001"
 fi
 
 echo "== Noir: CRS priming (NOT a measurement; may download/cache the Barretenberg CRS)"
 mkdir -p "$N/crs_priming"
-measure noir crs_priming prep 1 - -- bb write_vk -b "$N/redemption.json" -o "$N/crs_priming" \
+measure noir crs_priming prep 1 - -- bb write_vk -t noir-recursive -b "$N/redemption.json" -o "$N/crs_priming" \
     || die "bb CRS priming (write_vk) failed"
 
 echo "== Noir: verification key (once; precomputed VK for proving)"
 mkdir -p "$N/vk"
-measure noir write_vk once 1 "$N/vk/vk" -- bb write_vk -b "$N/redemption.json" -o "$N/vk" || die "bb write_vk failed"
+measure noir write_vk once 1 "$N/vk/vk" -- bb write_vk -t noir-recursive -b "$N/redemption.json" -o "$N/vk" || die "bb write_vk failed"
 
 echo "== Noir: UltraHonk prove with precomputed VK (1 warm-up + $REPS measured)"
 for i in $(seq 1 $((WARMUP + REPS))); do
@@ -334,14 +335,14 @@ for i in $(seq 1 $((WARMUP + REPS))); do
     mkdir -p "$N/prove_$d"
 done
 repeat noir prove "$REPS" "$N/prove_{i}/proof" -- \
-    bb prove -b "$N/redemption.json" -w "$N/witness.gz" -k "$N/vk/vk" -o "$N/prove_{i}"
+    bb prove -t noir-recursive -b "$N/redemption.json" -w "$N/witness.gz" -k "$N/vk/vk" -o "$N/prove_{i}"
 if live; then for f in "$N"/prove_*/public_inputs; do check_noir_public "$f"; done; echo "   all Noir public inputs = fixture TV-001"; fi
 
 echo "== Noir: UltraHonk verify (1 warm-up + $REPS measured)"
 # Each verify run checks the proof produced by the prove run of the same index,
 # so every generated UltraHonk proof (warm-up and measured) is verified once.
 repeat noir verify "$REPS" - -- \
-    bb verify -k "$N/vk/vk" -p "$N/prove_{i}/proof" -i "$N/prove_{i}/public_inputs"
+    bb verify -t noir-recursive -k "$N/vk/vk" -p "$N/prove_{i}/proof" -i "$N/prove_{i}/public_inputs"
 if live; then for f in "$L"/noir.verify.*.out; do grep -q "verified successfully" "$f" || die "UltraHonk verification failed ($f)"; done; fi
 
 rm -f "$PKG/_bench.toml"

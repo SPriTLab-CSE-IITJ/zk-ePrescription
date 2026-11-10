@@ -7,18 +7,20 @@ pub fn compute_patient_reference(patient_secret: Field) -> Field {
     identity_hash([patient_secret])
 }
 
-/// Computes the prescription commitment (protocol v2)
+/// Computes the prescription commitment (protocol v3)
 ///
-///     C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
+///     C = H1(prescription_id, doctor_id, medication_digest, expiry, threshold, I)
 ///
 /// (docs/protocol_specification.md, Section 6). Because the doctor signs C,
 /// including I binds the prescription to the patient's secret: a different
-/// secret yields a different, unsigned commitment. Thin wrapper around the
-/// shared domain-tagged Poseidon2 construction (domain 1).
+/// secret yields a different, unsigned commitment. medication_digest D is the
+/// digest of the medication list (Section 6.1), so the signature also binds
+/// the medicines the pharmacy will be shown. Thin wrapper around the shared
+/// domain-tagged Poseidon2 construction (domain 1).
 pub fn compute_commitment(
     prescription_id: Field,
     doctor_id: Field,
-    medicine_code: Field,
+    medication_digest: Field,
     expiry_date: u64,
     quantity_threshold: u64,
     patient_reference: Field,
@@ -27,7 +29,7 @@ pub fn compute_commitment(
     commitment_hash([
         prescription_id,
         doctor_id,
-        medicine_code,
+        medication_digest,
         expiry_date as Field,
         quantity_threshold as Field,
         patient_reference,

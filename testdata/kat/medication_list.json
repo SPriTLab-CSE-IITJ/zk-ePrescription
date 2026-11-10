@@ -1,0 +1,14 @@
+[
+  {
+    "code": "100000001",
+    "name": "Paracetamol 500 mg tablet",
+    "dosage": "1 tablet up to 4 times a day if needed",
+    "quantity": 20
+  },
+  {
+    "code": "100000002",
+    "name": "Amoxicillin 500 mg capsule",
+    "dosage": "1 capsule 3 times a day for 5 days",
+    "quantity": 15
+  }
+]

@@ -18,7 +18,7 @@ const fixture = require(path.resolve(repo, "testdata/kat/canonical_fixture.json"
 const scenario = fixture.nullifier_store_scenario;
 
 const read = (f) => Object.fromEntries(fs.readFileSync(path.join(results, f), "utf8").trim().split("\n")
-    .filter(Boolean).map((l) => { const [id, c, n] = l.split("\t"); return [id, { c, n }]; }));
+    .filter(Boolean).map((l) => { const [id, c, n, d] = l.split("\t"); return [id, { c, n, d }]; }));
 const outputs = { circom: read("circom_outputs.tsv"), noir: read("noir_outputs.tsv") };
 
 let ok = true;
@@ -37,9 +37,9 @@ for (const [backend, out] of Object.entries(outputs)) {
     lines.push(`${backend}: ${right}/${scenario.length} steps as expected`);
 }
 const ids = Object.keys(outputs.circom);
-const same = ids.filter((id) => outputs.noir[id] && outputs.noir[id].n === outputs.circom[id].n && outputs.noir[id].c === outputs.circom[id].c).length;
+const same = ids.filter((id) => outputs.noir[id] && ["c", "n", "d"].every((k) => outputs.noir[id][k] === outputs.circom[id][k])).length;
 if (same !== ids.length) ok = false;
-lines.push(`same C and N in both backends: ${same}/${ids.length} vectors`);
+lines.push(`same C, N and D in both backends: ${same}/${ids.length} vectors`);
 fs.writeFileSync(path.join(results, "nullifier_store.txt"), lines.join("\n") + "\n");
 console.log(lines.join("\n"));
 process.exit(ok ? 0 : 1);

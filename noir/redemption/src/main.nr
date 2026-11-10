@@ -27,7 +27,7 @@ fn main(
     doctor_pubkey_x: Field,
     doctor_pubkey_y: Field,
 
-    medicine_code: Field,
+    medication_digest: Field,
 
     quantity_threshold: u64,
     expiry_date: u64,
@@ -42,11 +42,12 @@ fn main(
     signature_nonce_x: Field,
     signature_nonce_y: Field,
     signature_s: Field,
-) -> pub [Field; 2] {
+) -> pub [Field; 3] {
     // ==========================================================
     // Phase 4 – Milestone 1
     // Patient reference I = H2(patient_secret) (private) and
-    // commitment C = H1(pid, did, med, expiry, threshold, I)
+    // commitment C = H1(pid, did, D, expiry, threshold, I), where D is the
+    // medication-list digest (also a public output)
     // ==========================================================
 
     let patient_reference = compute_patient_reference(patient_secret);
@@ -54,15 +55,11 @@ fn main(
     let commitment = compute_commitment(
         prescription_id,
         doctor_id,
-        medicine_code,
+        medication_digest,
         expiry_date,
         quantity_threshold,
         patient_reference,
     );
-
-    // ==========================================================
-    // Selective disclosure
-    // ==========================================================
 
     // ==========================================================
     // Phase 4 – Milestone 2
@@ -111,6 +108,7 @@ fn main(
 
     let outputs = finalize_outputs(
         commitment,
+        medication_digest,
         patient_secret,
         slot_index,
     );

@@ -28,7 +28,7 @@ The patient's app sends the patient reference
 
 to the doctor, who includes it in the prescription commitment and signs it:
 
-    C = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
+    C = H1(prescription_id, doctor_id, D, expiry, threshold, I)      (D: medication-list digest, v3)
 
 (`docs/protocol_specification.md`, Sections 6-8.) The patient-prescription
 association is therefore part of the signed prescription itself.
@@ -38,7 +38,7 @@ association is therefore part of the signed prescription itself.
 The redemption proof recomputes `I` from the private `patient_secret` and
 checks the doctor's signature on the resulting `C`. A different secret gives
 a different, unsigned commitment and no valid proof. `I` stays private; the
-public outputs remain `C` and `N`.
+public outputs are `C`, `N` and the medication-list digest `D` (v3).
 
 Only the holder of the patient's secret can produce a redemption proof, but
 the resulting redemption QR is a transferable bearer token for one slot on one

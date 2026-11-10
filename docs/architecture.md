@@ -9,7 +9,7 @@ implementations are always checked against the same values.
 
 | File | Content |
 |---|---|
-| `circuits/redemption.circom` | Redemption circuit: commitment, policy, registry, signature, nullifier. Public signals in snarkjs order: `[C, N, current_date, root]`. Instantiated with `DEPTH = 2` for the four-doctor fixture. |
+| `circuits/redemption.circom` | Redemption circuit: commitment, policy, registry, signature, nullifier. Public signals in snarkjs order: `[C, N, D, current_date, root]` (D = medication-list digest, protocol v3). Instantiated with `DEPTH = 2` for the four-doctor fixture. |
 | `circuits/lib_modules.circom` | `Commitment` (H1), `IdentityBinding` (H2), `Nullifier` (H3), 64-bit range-checked `ThresholdCheck` and `ExpiryCheck` |
 | `circuits/registry.circom` | `DoctorRegistry(DEPTH)`: leaf `H4(doctor_id, PKx, PKy)` computed in-circuit, `H5` Merkle path, binary direction bits |
 | `circuits/schnorr_bjj.circom` | `SchnorrBJJ`: `c = Hraw(Rx, Ry, PKx, PKy, C)`, `s*B8 = R + c*(8*PK)`, PK and R on curve, `8*PK != O`, `s < l`, full 254-bit `c` |
@@ -24,7 +24,7 @@ implementations are always checked against the same values.
 | Package | Content |
 |---|---|
 | `common/` | Poseidon2 sponge and `H1`–`H5` on `std::hash::poseidon2_permutation`; the only Poseidon2 source in Noir |
-| `redemption/` | Redemption circuit. `src/main.nr` calls `commitment.nr`, `policy.nr`, `registry.nr`, `schnorr.nr` (with `bjj_core.nr`), `outputs.nr`; public inputs `registry_root`, `current_date`; returns `[C, N]`. `tests/positive`, `tests/negative` hold the vectors; `src/fixture_tests.nr` holds the 8 Schnorr unit tests. |
+| `redemption/` | Redemption circuit. `src/main.nr` calls `commitment.nr`, `policy.nr`, `registry.nr`, `schnorr.nr` (with `bjj_core.nr`), `outputs.nr`; public inputs `registry_root`, `current_date`; returns `[C, N, D]`. `tests/positive`, `tests/negative` hold the vectors; `src/fixture_tests.nr` holds the 8 Schnorr unit tests. |
 | `kat/` | Cross-backend KAT harness, not a protocol circuit |
 | `registry_generator/` | Rebuilds the four-doctor registry (leaves, paths, root) in Noir for the KAT |
 
@@ -65,10 +65,13 @@ node circom/scripts/lib/gen_poseidon2_constants_circom.js > circom/circuits/pose
 |---|---|
 | `scripts/run.sh` | Container entry point: `demo`, `test`, `kat`, `help`; any other command is executed as given |
 | `scripts/test.sh` | `circom_suite.sh`, `noir_suite.sh`, the attack table, the KAT; writes `results/summary.txt` |
-| `scripts/circom_suite.sh` | Compile, TV witnesses and outputs, NT rejections, Schnorr vectors, local Groth16 setup, prove and verify, tampered public signals |
-| `scripts/noir_suite.sh` | Library and Schnorr tests, compile, TV execution and outputs, `bb` prove and verify, tampered public inputs, NT rejections |
+| `scripts/circom_suite.sh` | Compile, TV witnesses and outputs, NT rejections, Schnorr vectors, local Groth16 setup, prove and verify, tampered public signals, pharmacy view |
+| `scripts/noir_suite.sh` | Library and Schnorr tests, compile, TV execution and outputs, `bb` prove and verify (`-t noir-recursive`, the zero-knowledge UltraHonk variant), tampered public inputs, pharmacy view, NT rejections |
 | `scripts/kat/run_cross_backend_kat.sh` | JS reference vs Circom vs Noir for 6 input sets and the registry generator |
-| `scripts/demo.sh` | TV-001 end to end in both backends, one attack, one replay |
+| `scripts/demo.sh` | TV-001 end to end in both backends, the pharmacist's view, one attack, one replay |
+| `scripts/pharmacy_verify.js` | Pharmacy-side check (protocol v3): own root and date, proof, medication list against D; prints the list to dispense |
+| `scripts/lib/medication_list.js` | Canonical medication-list encoding and digest D = H7 (spec Section 6.1) |
+| `scripts/lib/pharmacy_cases.js` | Pharmacy-view tests on a real proof of each backend (signed list shown, altered lists rejected) |
 | `bench/run_device.sh` | One-command benchmark of the current machine: platform record, image build, regression, harness, summary, packed result |
 | `bench/run_benchmark.sh` | Benchmark harness v1.4.2 (host side) |
 

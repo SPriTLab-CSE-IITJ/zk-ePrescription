@@ -1,5 +1,14 @@
 # Protocol Specification
 
+**Version 3.** Protocol v3 lets the pharmacy see, after verification, exactly
+the medicines the doctor prescribed: the commitment contains the digest `D` of
+the prescription's medication list (Section 6.1) in place of the single
+medicine code of v2, and the redemption proof outputs `D`. The patient's app
+sends the list in clear; the pharmacy shows it to the pharmacist only if it
+hashes to `D`. In v2 the medicine was a private input, so the pharmacist could
+not learn from the proof what to dispense. The v2 vectors are kept in
+`testdata/historical/v2/`.
+
 **Version 2.** Protocol v2 binds the patient secret to the signed prescription
 by including the patient reference `I = H2(patient_secret)` in the commitment
 `C` (Sections 6-8). Protocol v1, measured in the benchmark release
@@ -170,9 +179,12 @@ The protocol uses the following domain identifiers:
 | Registry leaf `H4` | `4` |
 | Merkle node `H5` | `5` |
 | *(retired)* | `6` |
+| Medication-list digest `H7` (off-circuit) | `7` |
 
 Domain `6` was used by the protocol-v1 patient binding `PB = H6(I, C)`. It is
-retired in v2 and MUST NOT be reused for another construction.
+retired in v2 and MUST NOT be reused for another construction. Domain `7` is
+new in v3 (Section 6.1); it is computed by the doctor's software and by the
+pharmacy, not inside the redemption circuit.
 
 Domain separation MUST be preserved.
 
@@ -187,10 +199,12 @@ The prescription commitment is:
 ```text
 I = H2(patient_secret)
 
+D = H7(medication list)                      (Section 6.1)
+
 C = H1(
     prescription_id,
     doctor_id,
-    medicine_code,
+    D,
     expiry,
     threshold,
     I
@@ -198,6 +212,7 @@ C = H1(
 ```
 
 The six values above are part of the authenticated prescription statement.
+In the circuits the third input is named `medication_digest`.
 
 In particular, `expiry`, `threshold` and the patient reference `I` MUST be
 included in the commitment. Including `I` binds the prescription to the
@@ -211,6 +226,50 @@ A valid doctor signature in the redemption protocol is over this commitment.
 Consequently, changing any commitment input changes the authenticated
 prescription statement and invalidates a signature generated for the original
 commitment.
+
+### 6.1 Medication list and its digest D (protocol v3)
+
+A prescription carries a list of one or more medicines. Each item has exactly
+four fields:
+
+| Field | Content |
+|---|---|
+| `code` | medication code, 6-18 decimal digits (a SNOMED CT concept id) |
+| `name` | display name, e.g. `Paracetamol 500 mg tablet` |
+| `dosage` | dosage instructions as text, e.g. `1 tablet up to 4 times a day if needed` |
+| `quantity` | quantity to dispense per redemption, integer 1-1000000 |
+
+`name` and `dosage` are non-empty UTF-8 strings of at most 200 characters, in
+Unicode NFC form, without control characters (U+0000-U+001F, U+007F). A list
+has 1-32 items. The order is the doctor's and is significant.
+
+**Canonical encoding.** For each item in order, the UTF-8 bytes of
+`code`, `0x1F`, `name`, `0x1F`, `dosage`, `0x1F`, the decimal `quantity`,
+`0x1E` (unit and record separators, which the field rules exclude from the
+fields). The encoding is at most 4096 bytes.
+
+**Digest.** With `L` the byte length of the encoding and `b_0 .. b_{k-1}`
+the encoding split into 31-byte big-endian chunks (the last one shorter; each
+is below the field modulus),
+
+```text
+D = H7(list) = Hraw(7, L, b_0, ..., b_{k-1})
+```
+
+Reference implementation: `scripts/lib/medication_list.js`.
+
+**Use.** The doctor computes `D` and signs `C` over it (Section 6). Every
+redemption dispenses the whole list (decision D6, Section 27). The redemption
+circuit takes `D` as a private input, uses it in `C` and outputs it
+(Section 15.2); it does not parse the list. The patient's app sends the list
+in clear together with the proof. The pharmacy MUST recompute `D` from the
+received list and MUST NOT show or dispense anything unless it equals the `D`
+output by a valid proof (Section 26). Because `D` is inside the signed `C`, a
+changed, added, removed or swapped item changes `D` and is rejected; a proof
+claiming another `D` does not verify.
+
+The pharmacy learns the medication list and `D`; it does not learn the
+patient, the doctor, the prescription identifier, the expiry or the threshold.
 
 ---
 
@@ -231,7 +290,8 @@ patient-derived value would be a correlation point across all of a patient's
 prescriptions.
 
 The redemption proof exposes only the public values required for the
-redemption protocol, namely the commitment and the redemption nullifier.
+redemption protocol, namely the commitment, the redemption nullifier and the
+medication-list digest (Section 15.2).
 
 The patient secret itself remains private.
 
@@ -307,8 +367,9 @@ service, the same valid proof can be accepted more than once.
 
 ### 9.2 Redemption QR: a transferable bearer token
 
-A redemption proof together with its public values `(C, N)` (the redemption
-QR) is a transferable bearer token for one slot of one prescription, valid
+A redemption proof together with its public values `(C, N, D)` and the
+medication list (the redemption QR, or the token the app submits) is a
+transferable bearer token for one slot of one prescription, valid
 for the calendar date bound into the proof as `current_date`. The patient may
 generate it and give it to a relative or other representative, who can redeem
 it without learning `patient_secret`.
@@ -554,18 +615,22 @@ verifier.
 
 ### 15.2 Public redemption values
 
-The intended Phase-4 public outputs are:
+The Phase-4 public outputs are (protocol v3):
 
 ```text
 C
 N
+D
 ```
 
 That is:
 
 ```text
-[commitment, nullifier]
+[commitment, nullifier, medication_digest]
 ```
+
+together with the public inputs `registry_root` and `current_date`. In v2 the
+outputs were `[C, N]`.
 
 The redemption circuit MUST NOT expose:
 
@@ -584,7 +649,9 @@ assumptions and implementation correctness, that the prover knows a witness
 satisfying all required relations:
 
 1. the prescription commitment is correctly computed from the prescription
-   fields and from `I = H2(patient_secret)` for the prover's secret;
+   fields, the medication-list digest `D` and `I = H2(patient_secret)` for
+   the prover's secret, and the public `D` is the digest inside the signed
+   commitment;
 2. the prescription satisfies the policy constraints;
 3. the specified doctor identifier and public key are members of the authorized
    registry;
@@ -624,7 +691,7 @@ The required equality targets include:
 
 1. raw Poseidon2 permutation vectors;
 2. sponge test vectors;
-3. commitment `C` (including `I`);
+3. commitment `C` (including `I` and `D`);
 4. patient reference `I`;
 5. nullifier `N`;
 6. registry leaf `L`;
@@ -635,6 +702,7 @@ The final integrated canonical fixture SHOULD additionally demonstrate:
 
 - identical commitment;
 - identical nullifier;
+- identical medication-list digest `D`;
 - identical registry root;
 - identical doctor identifier;
 - identical public key;
@@ -654,7 +722,7 @@ Relevant cases include:
 
 - modified prescription identifier;
 - modified doctor identifier;
-- modified medicine code;
+- the digest of another medication list (one quantity changed);
 - modified expiry;
 - modified threshold;
 - modified public key;
@@ -671,11 +739,19 @@ Relevant cases include:
 - a different patient secret used to obtain a fresh nullifier for a slot;
 - a valid protocol-v1 signature (over the commitment without `I`) used for
   the v2 commitment;
-- a slot outside the u64 range.
+- a slot outside the u64 range;
+- a valid protocol-v2 signature (single medicine code instead of `D`) used
+  for the v3 commitment.
 
 The public values of every valid redemption SHOULD be checked to be exactly
-`registry_root`, `current_date`, `C` and `N`, with neither `I` nor
+`registry_root`, `current_date`, `C`, `N` and `D`, with neither `I` nor
 `patient_secret` among them.
+
+The pharmacy-side check of Section 6.1 SHOULD be tested on real proofs of
+both backends: the signed list is shown; a changed quantity, a swapped,
+added or removed medicine, an altered list together with its own digest
+substituted in the public values, and a root or date that is not the
+pharmacy's own are rejected.
 
 The redemption-service behaviour SHOULD also be tested on the outputs of both
 backends: each slot is accepted once, and a second redemption of the same slot
@@ -691,13 +767,17 @@ NOT silently continue to satisfy the corresponding verification relation.
 The canonical application scenario uses:
 
 ```text
-prescription_id = 1001
-doctor_id       = 5001
-medicine_code   = 123
-patient_secret  = 12345
-expiry          = 20261231
-threshold       = 3
+prescription_id   = 1001
+doctor_id         = 5001
+medication list   = testdata/kat/medication_list.json (2 items; illustrative
+                    placeholder codes, not checked against SNOMED CT)
+medication_digest = D of that list (Section 6.1)
+patient_secret    = 12345
+expiry            = 20261231
+threshold         = 3
 ```
+
+Protocol v1 and v2 used `medicine_code = 123` in place of `D`.
 
 A single coherent `current_date` value MUST be selected and used consistently
 for the final cross-backend fixture.
@@ -750,7 +830,13 @@ merely from zero-knowledge proving.
 What each party sees differs:
 
 - **Verifiers and the redemption service** see `C` and `N` (and the root and
-  date), never `I`. Different prescriptions of one patient have different `C`,
+  date), never `I`. Verifiers additionally see the medication list and its
+  digest `D` (Section 6.1); the redemption service needs only `N`. The
+  list is what the pharmacist must know to dispense; an unusual combination
+  of medicines can itself link prescriptions or hint at a condition, which
+  the protocol cannot hide from the dispensing pharmacy. `D` depends only on
+  the list, so identical lists of different patients have the same `D`.
+  Different prescriptions of one patient have different `C`,
   and `C` and `N` are pseudorandom to anyone without `patient_secret` under the
   hash assumptions, so these parties cannot link a patient's different
   prescriptions. They can link all redemptions of the same prescription
@@ -923,8 +1009,10 @@ leaf/node semantics remain unchanged.
 
 The circuit proves the redemption relation for whatever public inputs it is
 given. The following are requirements on the verifier (pharmacy) and the
-redemption service; they are assumptions of the security analysis and are
-not implemented in this artifact:
+redemption service; they are assumptions of the security analysis. Items 1-3
+and 5 are implemented by `scripts/pharmacy_verify.js` (with the root, date and
+key given to it by the pharmacy's configuration); item 4 is simulated in
+memory (`scripts/lib/nullifier_store.js`):
 
 1. **Registry root.** The verifier sets `registry_root` itself, from an
    authenticated publication of the registry authority; never from the
@@ -939,8 +1027,11 @@ not implemented in this artifact:
    (Groth16 proofs can be re-randomised). Check-and-insert of `N` is one atomic
    operation in a service shared by every verifier that can dispense the
    prescription; the medicine is dispensed only after the insert succeeded.
+5. **Medication list.** The verifier recomputes `D` from the medication list
+   it receives (Section 6.1) and shows the list to the pharmacist, and
+   dispenses, only if it equals the `D` output by the verified proof.
 
-## 27. Design Decisions (protocol v2)
+## 27. Design Decisions (protocols v2 and v3)
 
 | Decision | Status | Choice |
 |---|---|---|
@@ -949,6 +1040,7 @@ not implemented in this artifact:
 | D3 Patient reference | settled | Stable `I = H2(patient_secret)` per patient. Verifiers never receive `I`; issuing doctors do, and colluding issuers can correlate a patient's prescriptions (acknowledged limitation) |
 | D4 Registry-root acceptance | **open** | Latest root only, or a bounded window of recent roots |
 | D5 Patient binding `PB = H6(I, C)` | settled | Removed; superseded by `I` inside `C`; domain 6 retired |
+| D6 What the pharmacy learns (v3) | settled | The full medication list (code, name, dosage, quantity per redemption), bound to the signed `C` through `D` and shown after verification; every redemption dispenses the whole list, so `threshold` counts redemptions of the whole prescription. Drugs that need a different refill limit go on a separate prescription |
 
 ## 28. Summary of Normative Relations
 
@@ -957,7 +1049,9 @@ For reference, the core constructions are:
 ```text
 I  = H2(patient_secret)
 
-C  = H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I)
+D  = H7(medication list) = Hraw(7, L, b_0, ..., b_{k-1})   (off-circuit, Section 6.1)
+
+C  = H1(prescription_id, doctor_id, D, expiry, threshold, I)
 
 N  = H3(patient_secret, C, slot_index)
 
@@ -986,7 +1080,7 @@ slot_index   <  threshold
 Public Phase-4 redemption outputs:
 
 ```text
-[C, N]
+[C, N, D]
 ```
 
 The canonical application fixture uses four registry leaves and therefore a

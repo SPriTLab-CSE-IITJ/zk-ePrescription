@@ -19,10 +19,12 @@ field() { node -e 'console.log(require(process.argv[1])[process.argv[2]])' "$TV"
 
 echo "zk-ePrescription demo: one redemption, two proving stacks"
 echo "The patient proves the prescription is valid without revealing the secret,"
-echo "the doctor's identity or the prescription fields."
+echo "the doctor's identity or the prescription fields; the pharmacist sees only"
+echo "the doctor-signed medication list."
 
-step "1/6" "The prescription (canonical vector TV-001)"
-item "prescription id / medicine code" "$(field prescription_id) / $(field medicine_code)"
+step "1/7" "The prescription (canonical vector TV-001)"
+item "prescription id" "$(field prescription_id)"
+item "medication list digest D (signed in C)" "$(hexof "$(field medication_digest)")"
 item "doctor id (registry has 4 doctors)" "$(field doctor_id)"
 item "expiry / allowed redemptions" "$(field expiry) / $(field threshold)"
 item "redemption slot" "$(field slot_index)"
@@ -30,14 +32,16 @@ item "today's date (public, set by the pharmacy)" "$(field current_date)"
 echo "      private to the patient: secret, slot, all fields above except the date,"
 echo "      the doctor's key and signature, and the registry path"
 
-step "2/6" "Circom / Groth16: compute the public outputs and prove"
+step "2/7" "Circom / Groth16: compute the public outputs and prove"
 quiet circom "$REPO/circom/circuits/redemption.circom" --r1cs --wasm -o "$TMP" || fail "compile" "error"
 quiet node "$TMP/redemption_js/generate_witness.js" "$TMP/redemption_js/redemption.wasm" "$TV" "$TMP/w.wtns" || fail "witness" "error"
 quiet "$SNARKJS" wtns export json "$TMP/w.wtns" "$TMP/w.json"
 C_CIRCOM="$(hexof "$(node -e 'console.log(require(process.argv[1])[1])' "$TMP/w.json")")"
 N_CIRCOM="$(hexof "$(node -e 'console.log(require(process.argv[1])[2])' "$TMP/w.json")")"
+D_CIRCOM="$(hexof "$(node -e 'console.log(require(process.argv[1])[3])' "$TMP/w.json")")"
 item "commitment C" "$C_CIRCOM"
 item "nullifier N" "$N_CIRCOM"
+item "medication digest D" "$D_CIRCOM"
 echo "      one-time Groth16 setup (local dev ceremony; a few minutes) ..."
 (
     cd "$TMP"
@@ -58,31 +62,47 @@ echo "      one-time Groth16 setup (local dev ceremony; a few minutes) ..."
 ) || fail "Groth16 prove + verify" "error"
 ok "Groth16 proof verified" "$(wc -c <"$TMP/proof.json" | tr -d ' ') B proof"
 
-step "3/6" "Noir / UltraHonk: the same statement, a different proof system"
+step "3/7" "Noir / UltraHonk: the same statement, a different proof system"
 (cd "$NOIR" && nargo compile && nargo execute) >"$TMP/noir.txt" 2>&1 || { cat "$TMP/noir.txt" >>"$LOG"; fail "execute" "error"; }
 cat "$TMP/noir.txt" >>"$LOG"
 OUT="$(sed -n 's/.*Circuit output: \[\(.*\)\]/\1/p' "$TMP/noir.txt")"
 C_NOIR="$(hexof "$(echo "$OUT" | cut -d, -f1 | tr -d ' ')")"
 N_NOIR="$(hexof "$(echo "$OUT" | cut -d, -f2 | tr -d ' ')")"
+D_NOIR="$(hexof "$(echo "$OUT" | cut -d, -f3 | tr -d ' ')")"
 item "commitment C" "$C_NOIR"
 item "nullifier N" "$N_NOIR"
+item "medication digest D" "$D_NOIR"
 if [ "$SKIP_BB" = "1" ]; then
     item "UltraHonk prove + verify" "SKIPPED (ZKEP_SKIP_BB=1)"
 else
     (
         cd "$NOIR"
-        bb write_vk -b target/redemption.json -o target
-        bb prove -b target/redemption.json -w target/redemption.gz -k target/vk -o target
-        bb verify -k target/vk -p target/proof -i target/public_inputs
+        bb write_vk -t noir-recursive -b target/redemption.json -o target
+        bb prove -t noir-recursive -b target/redemption.json -w target/redemption.gz -k target/vk -o target
+        bb verify -t noir-recursive -k target/vk -p target/proof -i target/public_inputs
     ) >>"$LOG" 2>&1 || fail "UltraHonk prove + verify" "error"
     ok "UltraHonk proof verified" "$(wc -c <"$NOIR/target/proof" | tr -d ' ') B proof"
 fi
 
-step "4/6" "Both backends agree"
-[ "$C_CIRCOM" = "$C_NOIR" ] && [ "$N_CIRCOM" = "$N_NOIR" ] || fail "C and N identical in both backends" "DIFFERENT"
-ok "C and N identical in both backends" "yes"
+step "4/7" "Both backends agree"
+[ "$C_CIRCOM" = "$C_NOIR" ] && [ "$N_CIRCOM" = "$N_NOIR" ] && [ "$D_CIRCOM" = "$D_NOIR" ] || fail "C, N and D identical in both backends" "DIFFERENT"
+ok "C, N and D identical in both backends" "yes"
 
-step "5/6" "An attack: the signature scalar is changed (NT-001, s + 1)"
+step "5/7" "The pharmacist's view: the medication list, shown only if it is the signed one"
+ROOT="$(hexof "$(field root)")"
+node "$REPO/scripts/pharmacy_verify.js" --backend circom --vk "$TMP/vk.json" --proof "$TMP/proof.json" \
+    --public "$TMP/public.json" --list "$REPO/testdata/kat/medication_list.json" --root "$ROOT" \
+    --date "$(field current_date)" >"$TMP/pharmacy.txt" 2>&1 || { cat "$TMP/pharmacy.txt" >>"$LOG"; fail "pharmacy verification" "rejected"; }
+sed 's/^/      /' "$TMP/pharmacy.txt"
+node -e 'const f=process.argv[1]; const l=require(f); l[0].quantity+=20; require("fs").writeFileSync(process.argv[2], JSON.stringify(l))' \
+    "$REPO/testdata/kat/medication_list.json" "$TMP/altered_list.json"
+if node "$REPO/scripts/pharmacy_verify.js" --backend circom --vk "$TMP/vk.json" --proof "$TMP/proof.json" \
+    --public "$TMP/public.json" --list "$TMP/altered_list.json" --root "$ROOT" --date "$(field current_date)" >>"$LOG" 2>&1; then
+    fail "an altered list (one quantity raised) is rejected" "ACCEPTED"
+fi
+ok "an altered list (one quantity raised) is rejected" "digest differs from D"
+
+step "6/7" "An attack: the signature scalar is changed (NT-001, s + 1)"
 if node "$TMP/redemption_js/generate_witness.js" "$TMP/redemption_js/redemption.wasm" \
     "$REPO/circom/inputs/eprescription/canonical/NT-001.json" "$TMP/bad.wtns" >>"$LOG" 2>&1; then
     fail "Circom rejects the forged signature" "ACCEPTED"
@@ -95,7 +115,7 @@ fi
 rm -f "$NOIR/_demo.toml"
 ok "Noir rejects the forged signature" "assertion fails"
 
-step "6/6" "A replay: the same slot redeemed again on a later date (TV-004)"
+step "7/7" "A replay: the same slot redeemed again on a later date (TV-004)"
 cp "$NOIR/tests/positive/TV-004.toml" "$NOIR/_demo.toml"
 OUT4="$(cd "$NOIR" && nargo execute --prover-name _demo 2>&1)"; rm -f "$NOIR/_demo.toml"
 echo "$OUT4" >>"$LOG"

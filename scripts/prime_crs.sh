@@ -7,9 +7,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../noir/redemption"
 nargo compile >/dev/null
 nargo execute >/dev/null
 for attempt in 1 2 3 4 5; do
-    if bb write_vk -b target/redemption.json -o target >/dev/null 2>&1 \
-        && bb prove -b target/redemption.json -w target/redemption.gz -k target/vk -o target >/dev/null 2>&1 \
-        && bb verify -k target/vk -p target/proof -i target/public_inputs >/dev/null 2>&1; then
+    if bb write_vk -t noir-recursive -b target/redemption.json -o target >/dev/null 2>&1 \
+        && bb prove -t noir-recursive -b target/redemption.json -w target/redemption.gz -k target/vk -o target >/dev/null 2>&1 \
+        && bb verify -t noir-recursive -k target/vk -p target/proof -i target/public_inputs >/dev/null 2>&1; then
         rm -rf target
         echo "Barretenberg CRS cached:"
         ls -la "$HOME/.bb-crs"

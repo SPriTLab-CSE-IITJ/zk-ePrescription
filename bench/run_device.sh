@@ -53,11 +53,13 @@ step() { echo; echo "=================== $* ($(date -u +%H:%M:%SZ))"; }
 die()  { echo; echo "STOPPED: $*"; echo "Full log: $LOG"; exit 1; }
 need_root() { [ "$(id -u)" -eq 0 ] || die "$1 needs root: run again with sudo"; }
 
-# Reference build of protocol v2 (patient reference I inside C). The v1
-# circuits of the published benchmark (bench-evidence-2026-10-30) were
-# R1CS 26cbeef7... and UltraHonk VK 4e8a56ad...
-PAPER_R1CS=569a178fc9fd080a68a0df35fed795f3ea63468d189828862071c25e93d69196
-PAPER_UH_VK=28d9573f4dd9252c3cbd03843181f3d39e5cbc1363be8776fe210b9d3caade26
+# Reference build of protocol v3 (medication-list digest D as a public
+# output; PAPER_UH_VK is filled in from the first Docker build). Protocol v2
+# was R1CS 569a178f... / UltraHonk VK 28d9573f...; the v1 circuits of the
+# published benchmark (bench-evidence-2026-10-30) were R1CS 26cbeef7... and
+# UltraHonk VK 4e8a56ad...
+PAPER_R1CS=26fa6e60bd916c843e4c18120b8c948dfd430fff042d20be59ce6ab3eadb6b7e
+PAPER_UH_VK=47ebffa0fa47e19e6fb55b8dae74c4b10744c980fcda3d041500100aafa808ec
 
 # ------------------------------------------------------------------ 0. platform
 step "0. Platform"
@@ -207,9 +209,9 @@ docker run --rm -v "$REPO/results:/workspace/results" --entrypoint node "$IMAGE"
 R1CS=$(awk '$1 == "artifacts/circom/redemption.r1cs" {print $3}' "$R/artifact_manifest.sha256")
 UHVK=$(awk '$1 == "artifacts/noir/vk/vk" {print $3}' "$R/artifact_manifest.sha256")
 if [ "$R1CS" = "$PAPER_R1CS" ] && { [ -z "$PAPER_UH_VK" ] || [ "$UHVK" = "$PAPER_UH_VK" ]; }; then
-    echo "Compiled circuits: identical to the protocol-v2 reference build (R1CS ${R1CS:0:12}..., UltraHonk VK ${UHVK:0:12}...)"
+    echo "Compiled circuits: identical to the protocol-v3 reference build (R1CS ${R1CS:0:12}..., UltraHonk VK ${UHVK:0:12}...)"
 else
-    echo "Compiled circuits: DIFFER from the protocol-v2 reference build (this checkout changed the circuits); compare with care"
+    echo "Compiled circuits: DIFFER from the protocol-v3 reference build (this checkout changed the circuits); compare with care"
 fi
 if [ -s "$WORK/monitor.log" ]; then
     MAXTEMP="$(grep -o 'temp=[0-9.][0-9.]*' "$WORK/monitor.log" | cut -d= -f2 | sort -n | tail -1 || true)"

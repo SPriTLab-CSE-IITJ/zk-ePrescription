@@ -90,6 +90,8 @@ const DOMAIN = {
     NULLIFIER: 3n,
     REGISTRY_LEAF: 4n,
     MERKLE_NODE: 5n,
+    // 6 retired (v1 patient binding PB = H6(I, C)).
+    MEDICATION_LIST: 7n, // protocol v3: digest of the medication list, off-circuit
 };
 
 const tagged = (d, xs) => hashRaw([d, ...xs]);
@@ -99,7 +101,8 @@ module.exports = {
     permutation,
     hashRaw,
     DOMAIN,
-    // Protocol v2: the patient reference I = H2(patient_secret) is part of C.
+    // The patient reference I = H2(patient_secret) is part of C (since v2);
+    // med is the medication-list digest D (since v3).
     H1: (pid, did, med, expiry, threshold, identity) => tagged(DOMAIN.COMMITMENT, [pid, did, med, expiry, threshold, identity]),
     H2: (secret) => tagged(DOMAIN.IDENTITY, [secret]),
     H3: (secret, c, slot) => tagged(DOMAIN.NULLIFIER, [secret, c, slot]),

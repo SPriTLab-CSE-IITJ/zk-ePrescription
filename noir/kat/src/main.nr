@@ -8,7 +8,7 @@
 // Output layout (16 elements, protocol v2):
 //   [0..4)   permutation(perm_in)
 //   [4..11)  Hraw(sponge_in[0..n]) for n = 1..7
-//   11 H1(prescription_id, doctor_id, medicine_code, expiry, threshold, I) = C
+//   11 H1(prescription_id, doctor_id, medication_digest, expiry, threshold, I) = C
 //   12 H2(patient_secret)                                              = I
 //   13 H3(patient_secret, C, slot_index)                               = N
 //   14 H4(doctor_id, pubkey_x, pubkey_y)                               = L
@@ -24,7 +24,7 @@ fn main(
     sponge_in: [Field; 7],
     prescription_id: Field,
     doctor_id: Field,
-    medicine_code: Field,
+    medication_digest: Field,
     expiry: Field,
     threshold: Field,
     patient_secret: Field,
@@ -52,7 +52,7 @@ fn main(
     out[10] = poseidon2_hash_raw(sponge_in);
 
     let id = identity_hash([patient_secret]);
-    let c = commitment_hash([prescription_id, doctor_id, medicine_code, expiry, threshold, id]);
+    let c = commitment_hash([prescription_id, doctor_id, medication_digest, expiry, threshold, id]);
     out[11] = c;
     out[12] = id;
     out[13] = nullifier_hash([patient_secret, c, slot_index]);
