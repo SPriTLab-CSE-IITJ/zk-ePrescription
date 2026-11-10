@@ -226,6 +226,17 @@ async function main() {
     const C5002 = p2.H1(SCENARIO.prescription_id, 5002n, SCENARIO.medicine_code, SCENARIO.expiry, SCENARIO.threshold, I);
     const crossSig = sch.sign(123n, C5002);
 
+    // The doctor's protocol-v1 signature over the v1 commitment of the same
+    // fields, C_v1 = H1(pid, did, med, expiry, threshold) without I. Checked
+    // against the archived v1 fixture so that NT-023 uses the real old signature.
+    const C_v1 = p2.hashRaw([p2.DOMAIN.COMMITMENT, SCENARIO.prescription_id, SCENARIO.doctor_id, SCENARIO.medicine_code, SCENARIO.expiry, SCENARIO.threshold]);
+    const sigV1 = sch.sign(123n, C_v1);
+    {
+        const v1 = require(path.join(ROOT, "testdata/historical/v1/kat/canonical_fixture.json"));
+        if (hex(C_v1) !== v1.derived.commitment_C || hex(sigV1.s) !== v1.derived.signature.s) throw new Error("v1 signature does not match the archived v1 fixture");
+    }
+    const U64_LIMIT = 1n << 64n;
+
     const offCurvePk = [base.pk[0], (base.pk[1] + 1n) % P];
     if (sch.inCurve(offCurvePk)) throw new Error("expected off-curve");
     const offCurveR = [base.R[0], (base.R[1] + 1n) % P];
@@ -256,6 +267,12 @@ async function main() {
         // another secret. In protocol v1 both were ACCEPTED with fresh nullifiers.
         { id: "NT-021", desc: "valid issuance record redeemed under a different patient secret (copied QR)", w: witness(base, { patient_secret: OTHER_SECRET }) },
         { id: "NT-022", desc: "different patient secret to obtain a fresh nullifier for the last refill slot", w: witness(base, { patient_secret: OTHER_SECRET, slot_index: SCENARIO.threshold - 1n }) },
+        // Version mix-up: the doctor's valid v1 signature (over C without I)
+        // presented with the v2 statement.
+        { id: "NT-023", desc: "valid protocol-v1 signature (commitment without I) used for the v2 commitment", w: witness(base, { R: sigV1.R, s: sigV1.s }) },
+        // Out-of-range slot: 2^64 does not fit u64. Circom rejects it in the
+        // 64-bit range check; Noir rejects it when decoding the u64 input.
+        { id: "NT-024", desc: "out-of-range refill slot (2^64, outside u64)", w: witness(base, { slot_index: U64_LIMIT }) },
     ];
 
     // Sanity: the s + l malleability vector really satisfies the equation mod l,

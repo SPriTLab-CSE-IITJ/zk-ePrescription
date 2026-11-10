@@ -94,7 +94,7 @@ individual runs, are in the release
 | Claim | Statement | Evidence |
 |---|---|---|
 | **C1** Equivalence | Both backends compute identical protocol values (Poseidon2 permutation and sponge, C, I, N, registry leaves, nodes and root) for identical inputs. | E1: 100/100 equal |
-| **C2** Soundness checks | Valid redemptions verify in both backends; every attack vector (22, including redemption under another patient secret) is rejected by a circuit constraint, tampered public inputs do not verify, and a redemption service fed with either backend's outputs accepts each refill slot once and rejects replays. | E2: summary table |
+| **C2** Soundness checks | Valid redemptions verify in both backends; every attack vector (24, including redemption under another patient secret and a reused v1 signature) is rejected by a circuit constraint or, for an out-of-range slot in Noir, by the u64 input type, the patient reference `I` is never public, tampered public inputs do not verify, and a redemption service fed with either backend's outputs accepts each refill slot once and rejects replays. | E2: summary table |
 | **C3** Performance | Per-redemption cost of both stacks on three x86-64 machines (laptop, desktop, 128-core server), as reported in [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md). | E3 |
 | **C4** ARM64 boards | The same protocol runs and is benchmarked on NVIDIA Jetson Orin Nano and Raspberry Pi 5. | E4 |
 
@@ -137,9 +137,10 @@ the nullifier store, cross-backend equality) and ends with:
 SUMMARY                                   Circom / Groth16    Noir / UltraHonk
   valid redemptions (outputs = fixture)    5/5                 5/5
   proofs generated and verified            5/5                 5/5
-  attack vectors rejected                  22/22               22/22
+  attack vectors rejected                  24/24               24/24
   tampered public inputs rejected          4/4                 20/20
   Schnorr verifier vectors                 8/8                 8/8
+  I and secret not public (redemptions)    5/5                 5/5
   circuit size (native units)              12648 R1CS          16686 ACIR opcodes
   library tests (Noir)                     7/7
   nullifier store (replays rejected)       6/6 steps as expected
@@ -208,9 +209,17 @@ refill slot has exactly one nullifier.
   circuit; the redemption proof is not a fresh identity check. Binding a
   prescription to `patient_secret` binds it to a secret: that the secret
   belongs to the authenticated patient is the enrollment system's job.
-- The circuit only derives `N`; single-use redemption needs the redemption
-  service to check and store accepted nullifiers atomically. The guarantee is
-  one redemption per slot, at most `threshold` per prescription.
+- The circuit only derives `N`; single-use redemption needs one redemption
+  service, shared by all pharmacies, that checks and stores accepted
+  nullifiers atomically. The guarantee is one redemption per slot, at most
+  `threshold` per prescription. Neither that service nor patient notification
+  is implemented here.
+- A redemption QR is a transferable bearer token for one slot on one date: a
+  relative can collect the medicine with it, and a stolen or relayed QR is not
+  prevented from being used first (only detectable through notification).
+- The pharmacy must take the registry root from an authenticated source, the
+  date from its own clock and the verification key from its own software; the
+  circuits cannot check this ([`docs/protocol_specification.md`](docs/protocol_specification.md), Sections 26-27).
 - `C` and `N` are public, so redemptions of one prescription are linkable. No
   anonymity, unlinkability or collusion-resistance claim is made; see
   [`docs/threat_model.md`](docs/threat_model.md). There is no formal security proof.
@@ -224,7 +233,7 @@ refill slot has exactly one nullifier.
 ```text
 circom/circuits/     redemption.circom (entry), lib_modules, registry, schnorr_bjj,
                      poseidon2(+constants), kat/ harnesses
-circom/inputs/       TV-001..005 and NT-001..022 vectors, Schnorr unit vectors
+circom/inputs/       TV-001..005 and NT-001..024 vectors, Schnorr unit vectors
 circom/scripts/      build_canonical_fixture.js (generates every vector), lib/ JS reference
 noir/common/         Poseidon2 sponge and H1-H5 (the only Poseidon2 source in Noir)
 noir/redemption/     redemption circuit (entry), tests/positive, tests/negative

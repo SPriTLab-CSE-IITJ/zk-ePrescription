@@ -56,6 +56,7 @@ ELAPSED=$(( $(date +%s) - START ))
     printf '  %-40s %-19s %s\n' "attack vectors rejected" "$circom_attacks" "$noir_attacks"
     printf '  %-40s %-19s %s\n' "tampered public inputs rejected" "$circom_tampered" "$noir_tampered"
     printf '  %-40s %-19s %s\n' "Schnorr verifier vectors" "$circom_schnorr" "$noir_schnorr"
+    printf '  %-40s %-19s %s\n' "I and secret not public (redemptions)" "$circom_public" "$noir_public"
     printf '  %-40s %-19s %s\n' "circuit size (native units)" "$circom_constraints R1CS" "$noir_acir_opcodes ACIR opcodes"
     printf '  %-40s %s\n' "library tests (Noir)" "$noir_common"
     printf '  %-40s %s\n' "nullifier store (replays rejected)" "$store_steps steps as expected"

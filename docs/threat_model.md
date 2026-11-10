@@ -101,9 +101,21 @@ The threat model assumes:
    patient's national or medical health identity.
 5. The issuance layer includes the reference I of the enrolled patient in the
    commitment it has the doctor sign.
-6. The redemption state used for nullifier checking is maintained correctly.
-7. The notification mechanism reliably records and reports successful
-   redemptions.
+6. The redemption state used for nullifier checking is one service shared by
+   every pharmacy that can dispense a prescription, decides on N only, and
+   checks and inserts N atomically.
+7. The pharmacy sets the registry root from an authenticated publication of
+   the registry authority and the date from its own trusted clock; neither is
+   taken from the redemption QR.
+8. The verification key and circuit version are pinned in the pharmacy
+   software.
+9. The notification mechanism (application layer, not implemented here)
+   reliably reports redemptions to the patient. It provides detection, not
+   prevention.
+
+Assumptions 6-9 are environmental: the circuits cannot establish them, and
+this artifact does not implement them (docs/protocol_specification.md,
+Section 26). Which registry roots are acceptable is an open decision (D4).
 
 The ZK circuit does not itself authenticate the national health-identity
 authority.
@@ -143,17 +155,25 @@ doctor's signature on C. A secret other than s_P gives a different, unsigned
 commitment, so a copy of the issuance record cannot be redeemed under another
 secret, and the same prescription cannot be given fresh nullifiers.
 
-Redemption requires the patient's credential (the secret), not the patient's
-physical presence. A family member or authorized representative may redeem
-the prescription using the patient's app. Therefore:
+Producing a redemption proof requires the patient's credential (the secret).
+Presenting it does not: the redemption QR (proof, C, N) is a transferable
+bearer token for one slot on the date bound into it. The patient may generate
+it and give it to a family member or authorized representative, who redeems
+without learning s_P. Therefore:
 
     Presenter != Patient
 
-is not itself a protocol violation, but
+is not a protocol violation, and
 
-    Presenter without s_P
+    Presenter with neither s_P nor a redemption QR made with s_P
 
 cannot redeem.
+
+The token is not bound to a pharmacy or session (decision D2). Theft or relay
+of a redemption QR, and a first-use race on its date, are NOT prevented; the
+nullifier service ensures only that the slot is dispensed once, to whoever
+presents first. Unexpected redemptions are to be detected through patient
+notification.
 
 Protocol v1 used an issuance-side binding PB = H6(I, C) that the redemption
 circuit did not verify; it is superseded by I inside C.
@@ -397,11 +417,17 @@ that should remain private.
 
 The game includes unintended linkage between observations.
 
-The credential-based redemption model is explicit:
+The bearer-redemption model is explicit:
 
     Presenter != Patient
 
-is permitted, provided the presenter holds the patient's secret.
+is permitted, provided the presenter holds a redemption QR generated with the
+patient's secret (or the secret itself).
+
+Verifiers (pharmacies and the redemption service) see C and N but never I;
+issuing doctors know I and are outside this game's privacy goal. Colluding
+issuers can correlate a patient's prescriptions through the stable I
+(decision D3).
 
 The protocol therefore does not claim to identify the physical person who
 presents a prescription at the pharmacy.
@@ -450,9 +476,10 @@ The protocol separates the following properties:
        N not in S, N = H3(s_P, C, slot), slot < threshold
        (at most `threshold` redemptions per prescription)
 
-8. Credential-based redemption:
+8. Bearer redemption token:
 
-       Presenter may differ from Patient, but must hold s_P
+       Presenter may differ from Patient; the proof must have been made
+       with s_P; theft and relay are detected (notification), not prevented
 
 9. Redemption accountability:
 

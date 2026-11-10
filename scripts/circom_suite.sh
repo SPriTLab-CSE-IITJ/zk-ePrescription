@@ -145,6 +145,13 @@ done
 record circom_proofs "$n/$n"
 ok "Groth16 prove + verify TV-001..$(printf '%03d' "$n")" "$n/$n proofs verified"
 
+# --- public values: only root, date, C, N (I and the secret never public) ----
+PUBCHK="$(node "$REPO/scripts/lib/public_values_check.js" circom "$TMP/r1cs_info.txt" "$TMP"/TV-*.public.json 2>&1)" \
+    || { echo "$PUBCHK" >>"$LOG"; fail "public values (Circom)" "$PUBCHK"; }
+echo "$PUBCHK" >>"$LOG"
+record circom_public "${PUBCHK%% redemptions*}/$n"
+ok "public values: root, date, C, N only" "I not public in ${PUBCHK%% redemptions*}/$n proofs"
+
 # --- tampered public signals -------------------------------------------------
 id=TV-001
 for idx in 0 1 2 3; do
