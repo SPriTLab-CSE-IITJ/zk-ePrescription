@@ -19,6 +19,7 @@ function circomSite([tpl, line]) {
     if (tpl === "SchnorrBJJ") return n <= 60 ? "s < l bound" : n <= 85 ? "8*PK != O" : "signature";
     if (tpl === "DoctorRegistry") return n <= 50 ? "binary direction" : "registry";
     if (tpl === "BabyCheck") return "point on curve";
+    if (tpl === "Num2Bits") return "u64 range";
     if (tpl === "EPrescriptionMain") return n <= 61 ? "slot < threshold" : n <= 66 ? "expiry" : n <= 78 ? "registry" : "signature";
     return tpl || "?";
 }
@@ -29,6 +30,7 @@ const NOIR = {
     "src/registry.nr:7": "binary direction", "src/schnorr.nr:19": "PK on curve",
     "src/schnorr.nr:20": "R on curve", "src/schnorr.nr:21": "s < l bound",
     "src/schnorr.nr:37": "8*PK != O",
+    "abi:u64": "u64 input type",
 };
 const noirSite = ([loc]) => NOIR[loc] || loc || "?";
 

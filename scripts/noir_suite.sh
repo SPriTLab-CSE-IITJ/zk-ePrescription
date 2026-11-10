@@ -111,6 +111,13 @@ fs.writeFileSync("target/public_inputs.count", String(n));
 done
 record noir_valid "$nv"
 ok "valid vectors TV-001..$(printf '%03d' "$nv")" "$nv/$nv executed, outputs = fixture"
+
+# --- public values: only root, date, C, N (I and the secret never public) ----
+PUBCHK="$(node "$REPO/scripts/lib/public_values_check.js" noir "$PKG_ROOT/target/$PKG.json" "$RESULTS/noir_outputs.tsv" 2>&1)" \
+    || { echo "$PUBCHK" >>"$LOG"; fail "public values (Noir)" "$PUBCHK"; }
+echo "$PUBCHK" >>"$LOG"
+record noir_public "${PUBCHK%% redemptions*}/$nv"
+ok "public values: root, date, C, N only" "I not public in ${PUBCHK%% redemptions*}/$nv executions"
 if [ "$SKIP_BB" = "1" ]; then
     record noir_proofs "skipped"
     record noir_tampered "skipped"
@@ -135,10 +142,23 @@ for VECTOR in "$PKG_ROOT"/tests/negative/*.toml; do
     fi
     rm -f "$PKG_ROOT/_vector.toml"
     { echo "--- $NAME"; cat "$RESULTS/logs/_nt.log"; } >>"$LOG"
-    grep -q "Failed constraint" "$RESULTS/logs/_nt.log" || fail "attack vector $NAME" "tool or input error, not a constraint"
-    printf '%s\t%s\n' "$NAME" "$(grep -m1 -oE 'src/[a-z_]+\.nr:[0-9]+' "$RESULTS/logs/_nt.log")" >>"$RESULTS/noir_negative.tsv"
+    if grep -q "Failed constraint" "$RESULTS/logs/_nt.log"; then
+        printf '%s\t%s\n' "$NAME" "$(grep -m1 -oE 'src/[a-z_]+\.nr:[0-9]+' "$RESULTS/logs/_nt.log")" >>"$RESULTS/noir_negative.tsv"
+    elif head -1 "$VECTOR" | grep -q "outside u64" \
+        && grep -q "does not fall within range of allowable values for a Integer { sign: Unsigned, width: 64 }" "$RESULTS/logs/_nt.log"; then
+        # A value outside u64 cannot be given to a u64 parameter at all:
+        # nargo rejects it while decoding the input (type check, not a constraint).
+        printf '%s\t%s\n' "$NAME" "abi:u64" >>"$RESULTS/noir_negative.tsv"
+    else
+        fail "attack vector $NAME" "tool or input error, not a constraint"
+    fi
     n=$((n + 1))
 done
 rm -f "$RESULTS/logs/_nt.log"
 record noir_attacks "$n/$total"
-ok "attack vectors NT-001..$(printf '%03d' "$total")" "$n/$total rejected by a constraint"
+nabi="$(grep -c 'abi:u64' "$RESULTS/noir_negative.tsv" || true)"
+if [ "$nabi" -gt 0 ]; then
+    ok "attack vectors NT-001..$(printf '%03d' "$total")" "$n/$total rejected ($((n - nabi)) by a constraint, $nabi by the u64 input type)"
+else
+    ok "attack vectors NT-001..$(printf '%03d' "$total")" "$n/$total rejected by a constraint"
+fi

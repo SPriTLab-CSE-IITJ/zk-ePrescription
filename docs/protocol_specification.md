@@ -300,7 +300,31 @@ check and the insertion MUST be atomic, so that two verifiers cannot accept
 the same nullifier concurrently.
 
 The guarantee is one redemption per slot: a prescription with threshold `t`
-can be redeemed at most `t` times in total, not once overall.
+can be redeemed at most `t` times in total, not once overall. It holds only if
+every verifier that can dispense the prescription uses the same nullifier
+service and that service checks and inserts atomically; without such a
+service, the same valid proof can be accepted more than once.
+
+### 9.2 Redemption QR: a transferable bearer token
+
+A redemption proof together with its public values `(C, N)` (the redemption
+QR) is a transferable bearer token for one slot of one prescription, valid
+for the calendar date bound into the proof as `current_date`. The patient may
+generate it and give it to a relative or other representative, who can redeem
+it without learning `patient_secret`.
+
+The token is not bound to a pharmacy or a session (design decision D2,
+Section 27). Consequently the protocol does NOT prevent theft or relay of a
+redemption QR, or a first-use race between the intended holder and someone
+who copied it, on the date it is valid.
+
+Misuse is intended to be detected, not prevented: the patient's application
+can derive the expected nullifiers `N_i = H3(patient_secret, C, i)` for
+`i = 0..t-1` and learn which of them the redemption service has recorded, so
+that unexpected redemptions can be reported. Reporting where and when a
+redemption happened additionally requires the service to expose redemption
+event information to the patient's application. This notification is an
+application-level requirement; it is not implemented in this artifact.
 
 Thus:
 
@@ -644,7 +668,14 @@ Relevant cases include:
 - invalid/off-curve signature nonce;
 - a valid issuance record redeemed under a different patient secret
   (patient binding, v2);
-- a different patient secret used to obtain a fresh nullifier for a slot.
+- a different patient secret used to obtain a fresh nullifier for a slot;
+- a valid protocol-v1 signature (over the commitment without `I`) used for
+  the v2 commitment;
+- a slot outside the u64 range.
+
+The public values of every valid redemption SHOULD be checked to be exactly
+`registry_root`, `current_date`, `C` and `N`, with neither `I` nor
+`patient_secret` among them.
 
 The redemption-service behaviour SHOULD also be tested on the outputs of both
 backends: each slot is accepted once, and a second redemption of the same slot
@@ -716,9 +747,26 @@ and what state is retained by the verifier.
 The Phase-4 circuit therefore does not claim universal anonymity or unlinkability
 merely from zero-knowledge proving.
 
+What each party sees differs:
+
+- **Verifiers and the redemption service** see `C` and `N` (and the root and
+  date), never `I`. Different prescriptions of one patient have different `C`,
+  and `C` and `N` are pseudorandom to anyone without `patient_secret` under the
+  hash assumptions, so these parties cannot link a patient's different
+  prescriptions. They can link all redemptions of the same prescription
+  through `C`.
+- **Issuing doctors** know `I` and the `C` they signed. They are outside the
+  verifier-privacy property: one doctor can link the redemptions of its own
+  prescriptions to the patient, and colluding issuers can correlate a
+  patient's prescriptions through the stable `I` (decision D3, Section 27).
+
+The scoping differs from application-scoped nullifiers such as Nova
+Aadhaar's: here the linkable unit is one prescription (`C`), not one
+application.
+
 In particular:
 
-- public commitments may be linkable when reused;
+- public commitments are linkable when reused;
 - nullifier reuse is intentionally detectable for replay handling;
 - external identity systems may possess information unavailable to the ZK
   verifier;
@@ -871,7 +919,38 @@ leaf/node semantics remain unchanged.
 
 ---
 
-## 26. Summary of Normative Relations
+## 26. Verifier Requirements (environmental assumptions)
+
+The circuit proves the redemption relation for whatever public inputs it is
+given. The following are requirements on the verifier (pharmacy) and the
+redemption service; they are assumptions of the security analysis and are
+not implemented in this artifact:
+
+1. **Registry root.** The verifier sets `registry_root` itself, from an
+   authenticated publication of the registry authority; never from the
+   redemption QR. Which roots are acceptable is an open decision (D4,
+   Section 27).
+2. **Date.** The verifier sets `current_date` from its own trusted clock;
+   never from the redemption QR.
+3. **Verification key.** The verification key and circuit version are pinned
+   in the verifier software (by hash); a proof is never verified against a key
+   it supplies.
+4. **Nullifier service.** Acceptance is decided on `N`, never on proof bytes
+   (Groth16 proofs can be re-randomised). Check-and-insert of `N` is one atomic
+   operation in a service shared by every verifier that can dispense the
+   prescription; the medicine is dispensed only after the insert succeeded.
+
+## 27. Design Decisions (protocol v2)
+
+| Decision | Status | Choice |
+|---|---|---|
+| D1 Redemption model | settled | Credential-bound issuance (`I` inside the signed `C`), transferable bearer redemption QR (Section 9.2) |
+| D2 Pharmacy/session binding of proofs | settled | Not used; relay and first-use races are an accepted risk of the bearer design, mitigated by notification (detection only) |
+| D3 Patient reference | settled | Stable `I = H2(patient_secret)` per patient. Verifiers never receive `I`; issuing doctors do, and colluding issuers can correlate a patient's prescriptions (acknowledged limitation) |
+| D4 Registry-root acceptance | **open** | Latest root only, or a bounded window of recent roots |
+| D5 Patient binding `PB = H6(I, C)` | settled | Removed; superseded by `I` inside `C`; domain 6 retired |
+
+## 28. Summary of Normative Relations
 
 For reference, the core constructions are:
 

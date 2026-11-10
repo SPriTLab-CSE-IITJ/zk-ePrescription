@@ -230,6 +230,14 @@
     {
       "id": "NT-022",
       "description": "different patient secret to obtain a fresh nullifier for the last refill slot"
+    },
+    {
+      "id": "NT-023",
+      "description": "valid protocol-v1 signature (commitment without I) used for the v2 commitment"
+    },
+    {
+      "id": "NT-024",
+      "description": "out-of-range refill slot (2^64, outside u64)"
     }
   ],
   "nullifier_store_scenario": [

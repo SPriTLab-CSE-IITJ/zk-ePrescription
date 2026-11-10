@@ -40,10 +40,13 @@ checks the doctor's signature on the resulting `C`. A different secret gives
 a different, unsigned commitment and no valid proof. `I` stays private; the
 public outputs remain `C` and `N`.
 
-Redemption is credential-based rather than bearer-based: whoever presents the
-prescription at the pharmacy must hold the patient's secret, for example a
-caregiver using the patient's app. A copy of the issuance record alone is not
-enough.
+Only the holder of the patient's secret can produce a redemption proof, but
+the resulting redemption QR is a transferable bearer token for one slot on one
+date: the patient can generate it and send it to a relative who collects the
+medicine, without sharing the secret. A copy of the issuance record alone is
+not enough. A stolen or relayed redemption QR is not prevented from being used
+first on its date; the patient is meant to notice it through notification
+(below).
 
 The pharmacy does not require fresh authentication against the national
 health-identity system for every redemption.
@@ -55,7 +58,11 @@ protection (nullifier).
 ## Accountability
 
 After redemption, the system records the redemption event and notifies the
-patient through the patient application.
+patient through the patient application. Because the patient's app can
+compute the nullifiers of its own prescription slots, it can learn which slots
+were redeemed without the redemption service knowing who the patient is;
+reporting where and when also requires the service to expose the redemption
+event to the app. This is detection, not prevention.
 
 *Status:* redemption recording and patient notification are application-layer
 services; they are not implemented in this research artifact.
