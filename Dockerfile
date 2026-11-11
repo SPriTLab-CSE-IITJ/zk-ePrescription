@@ -100,19 +100,34 @@ RUN curl -L \
     && bb --version
 
 # ---------------------------------------------------------
-# Pin the downloaded prover binaries (x86-64): the build stops if noirup/bbup
-# deliver anything other than the binaries verified on 2026-10-28. On other
-# architectures (Raspberry Pi, Jetson) the hashes are printed for the record.
+# Pin the downloaded prover binaries: the build stops if noirup/bbup deliver
+# anything other than the binaries verified before (x86-64: 2026-10-28;
+# aarch64: the Raspberry Pi 5 build of 2026-11-03, same versions). On any
+# other architecture the hashes are only printed. To build with different
+# binaries on purpose, pass --build-arg NARGO_SHA256_<ARCH>=... and
+# BB_SHA256_<ARCH>=..., or --build-arg PIN_TOOL_HASHES=0 (recorded in the log).
 # ---------------------------------------------------------
 
 ARG NARGO_SHA256_AMD64=247b1d71a01993f2f4102ba92b3da84f5ff2cbafdde0de989c7aa3c6c9600c1a
 ARG BB_SHA256_AMD64=031556ee54dc65b3fffb6388a267460c02f988dd4420721b381067d0151b4942
+ARG NARGO_SHA256_ARM64=a4eb557b1e1130605ed3e6193dc7cffa96bdc1dcbda3e757c88db0de34756dd0
+ARG BB_SHA256_ARM64=1d49d86952aceaf20c7d347985e6aa4324ff712f53946c2e2a6b91bd100c11a2
+ARG PIN_TOOL_HASHES=1
 
 RUN echo "tool binaries ($(uname -m)):" \
     && sha256sum "$(command -v circom)" "$(command -v nargo)" "$(command -v bb)" \
-    && if [ "$(uname -m)" = "x86_64" ]; then \
-         echo "${NARGO_SHA256_AMD64}  $(command -v nargo)" | sha256sum -c - \
-         && echo "${BB_SHA256_AMD64}  $(command -v bb)" | sha256sum -c - ; \
+    && case "$(uname -m)" in \
+         x86_64)  NARGO_SHA="${NARGO_SHA256_AMD64}"; BB_SHA="${BB_SHA256_AMD64}" ;; \
+         aarch64) NARGO_SHA="${NARGO_SHA256_ARM64}"; BB_SHA="${BB_SHA256_ARM64}" ;; \
+         *)       NARGO_SHA=""; BB_SHA="" ;; \
+       esac \
+    && if [ "${PIN_TOOL_HASHES}" != "1" ]; then \
+         echo "tool hash pinning DISABLED (PIN_TOOL_HASHES=${PIN_TOOL_HASHES})"; \
+       elif [ -n "$NARGO_SHA" ]; then \
+         echo "${NARGO_SHA}  $(command -v nargo)" | sha256sum -c - \
+         && echo "${BB_SHA}  $(command -v bb)" | sha256sum -c - ; \
+       else \
+         echo "no pinned hashes for $(uname -m); recorded above only"; \
        fi
 
 # ---------------------------------------------------------

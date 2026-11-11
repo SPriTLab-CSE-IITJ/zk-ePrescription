@@ -101,6 +101,17 @@ if node "$REPO/scripts/pharmacy_verify.js" --backend circom --vk "$TMP/vk.json" 
     fail "an altered list (one quantity raised) is rejected" "ACCEPTED"
 fi
 ok "an altered list (one quantity raised) is rejected" "digest differs from D"
+STORE="$TMP/redemption_store"
+PV=(node "$REPO/scripts/pharmacy_verify.js" --backend circom --vk "$TMP/vk.json" --proof "$TMP/proof.json"
+    --public "$TMP/public.json" --list "$REPO/testdata/kat/medication_list.json" --root "$ROOT"
+    --date "$(field current_date)" --store "$STORE")
+"${PV[@]}" --pharmacy pharmacy-A >>"$LOG" 2>&1 || fail "first presentation, recorded with the redemption service" "rejected"
+ok "first presentation, recorded with the redemption service" "dispensed at pharmacy-A"
+if "${PV[@]}" --pharmacy pharmacy-B >"$TMP/second.txt" 2>&1; then
+    fail "the same token at a second pharmacy is rejected" "ACCEPTED"
+fi
+cat "$TMP/second.txt" >>"$LOG"
+ok "the same token at a second pharmacy is rejected" "already redeemed at pharmacy-A"
 
 step "6/7" "An attack: the signature scalar is changed (NT-001, s + 1)"
 if node "$TMP/redemption_js/generate_witness.js" "$TMP/redemption_js/redemption.wasm" \
