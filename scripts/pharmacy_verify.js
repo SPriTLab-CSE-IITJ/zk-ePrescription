@@ -8,11 +8,14 @@
 //   3. the medication list sent by the patient's app hashes to the digest D
 //      that the proof outputs (D is part of the doctor-signed commitment C).
 // It then prints the list and the nullifier N that the shared redemption
-// service must accept exactly once (not done here; see Section 9.1).
+// service must accept exactly once. With --store, it submits N to the shared
+// redemption service (scripts/lib/redemption_service.js, atomic
+// check-and-insert) and dispenses only if N was not redeemed before.
 //
 //   node scripts/pharmacy_verify.js --backend circom|noir \
 //        --vk <vk> --proof <proof> --public <public values> \
-//        --list <medication_list.json> --root <0x..> --date <YYYYMMDD>
+//        --list <medication_list.json> --root <0x..> --date <YYYYMMDD> \
+//        [--store <redemption store dir> --pharmacy <HFR id>]
 //
 //   circom: --vk verification_key.json --proof proof.json --public public.json
 //   noir:   --vk target/vk --proof target/proof --public target/public_inputs
@@ -24,6 +27,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const meds = require("./lib/medication_list");
+const service = require("./lib/redemption_service");
 
 const hex = (x) => "0x" + BigInt(x).toString(16).padStart(64, "0");
 
@@ -90,11 +94,18 @@ if (require.main === module) {
     const args = {};
     const a = process.argv.slice(2);
     for (let i = 0; i < a.length; i += 2) args[a[i].replace(/^--/, "")] = a[i + 1];
-    const need = ["backend", "vk", "proof", "public", "list", "root", "date"];
+    const need = ["backend", "vk", "proof", "public", "list", "root", "date"];   // optional: store, pharmacy
     if (need.some((k) => !args[k]) || !["circom", "noir"].includes(args.backend)) {
         console.error(`usage: node ${path.basename(__filename)} ${need.map((k) => `--${k} <..>`).join(" ")}`);
         process.exit(2);
     }
-    check(args).then((r) => { console.log(report(r)); process.exit(r.accept ? 0 : 1); })
+    check(args).then((r) => {
+        if (r.accept && args.store) {
+            const s = service.redeem(args.store, r.pub.N, args.pharmacy || "unknown");
+            if (!s.accepted) r = { accept: false, reason: `this refill was already redeemed (${s.record && s.record.pharmacy}, ${s.record && s.record.redeemed_at})`, pub: r.pub };
+        }
+        console.log(report(r));
+        process.exit(r.accept ? 0 : 1);
+    })
         .catch((e) => { console.error(e); process.exit(2); });
 }

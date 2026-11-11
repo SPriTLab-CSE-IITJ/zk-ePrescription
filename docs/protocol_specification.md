@@ -113,6 +113,45 @@ Thus the total permutation consists of:
 + 8 full rounds
 ```
 
+**Permutation.** The permutation is the Poseidon2 instance used by Noir's
+standard library (`std::hash::poseidon2_permutation`, Barretenberg) for
+BN254 and `t = 4`:
+
+1. initial external linear layer: `s <- M_E * s`;
+2. 4 full rounds: add the round constants `RC[r][0..3]`, apply `x^5` to all
+   four elements, `s <- M_E * s`;
+3. 56 partial rounds: add `RC[r][0]` to `s0` only, apply `x^5` to `s0` only,
+   `s <- M_I * s`;
+4. 4 full rounds as in step 2.
+
+with the external matrix and the internal matrix
+
+```text
+        [5 7 1 3]
+M_E  =  [4 6 1 1]          M_I = J + diag(d0, d1, d2, d3)
+        [1 3 5 7]          (J = all-ones 4x4 matrix), i.e.
+        [1 1 4 6]          s_i <- d_i * s_i + (s0 + s1 + s2 + s3)
+```
+
+**Constants.** The 64 x 4 round constants `RC` (rows of partial rounds use
+only their first element) and the internal diagonal `d` are taken verbatim
+from noir-lang/noir tag `v1.0.0-beta.24`,
+`acvm-repo/bn254_blackbox_solver/src/poseidon2_constants.rs`, the constants
+behind Noir's permutation. They are stored in
+`circom/scripts/lib/poseidon2_constants.json` (with their provenance) and
+generated into `circom/circuits/poseidon2_constants.circom`
+(docs/architecture.md). The cross-backend KAT checks the Circom permutation
+against Noir's and against independent reference vectors
+(`testdata/kat/poseidon2_permutation_reference.json`).
+
+**Input encoding.** Every hash input is a canonical element of the BN254
+scalar field, i.e. an integer in `[0, p)`. Dates (`YYYYMMDD`), `threshold`
+and `slot_index` are 64-bit unsigned integers (Section 14) embedded as field
+elements; identifiers, keys and digests are field elements as given. The
+sponge has no padding: the input length `n` enters through the initial
+capacity value (Section 4.1), so inputs of different lengths do not collide
+by construction.
+
 ### 4.1 Sponge construction
 
 The project-level sponge `Hraw(x_0, ..., x_{n-1})` hashes a sequence of `n`
@@ -384,8 +423,10 @@ can derive the expected nullifiers `N_i = H3(patient_secret, C, i)` for
 `i = 0..t-1` and learn which of them the redemption service has recorded, so
 that unexpected redemptions can be reported. Reporting where and when a
 redemption happened additionally requires the service to expose redemption
-event information to the patient's application. This notification is an
-application-level requirement; it is not implemented in this artifact.
+event information to the patient's application. The artifact's redemption
+service records the pharmacy and time with each nullifier and answers such
+queries (`scripts/lib/redemption_service.js query`); pushing a notification
+to the patient is an application-level requirement that is not implemented.
 
 Thus:
 
@@ -1011,13 +1052,15 @@ The circuit proves the redemption relation for whatever public inputs it is
 given. The following are requirements on the verifier (pharmacy) and the
 redemption service; they are assumptions of the security analysis. Items 1-3
 and 5 are implemented by `scripts/pharmacy_verify.js` (with the root, date and
-key given to it by the pharmacy's configuration); item 4 is simulated in
-memory (`scripts/lib/nullifier_store.js`):
+key given to it by the pharmacy's configuration); item 4 is implemented by
+`scripts/lib/redemption_service.js` (one file per accepted `N`, created
+atomically with exclusive create on a shared local file system) and tested
+with concurrent submissions (`scripts/lib/nullifier_concurrency.js`):
 
 1. **Registry root.** The verifier sets `registry_root` itself, from an
    authenticated publication of the registry authority; never from the
-   redemption QR. Which roots are acceptable is an open decision (D4,
-   Section 27).
+   redemption QR. It accepts the current root and any root published within
+   the last `Delta` (decision D4, Section 27).
 2. **Date.** The verifier sets `current_date` from its own trusted clock;
    never from the redemption QR.
 3. **Verification key.** The verification key and circuit version are pinned
@@ -1038,7 +1081,7 @@ memory (`scripts/lib/nullifier_store.js`):
 | D1 Redemption model | settled | Credential-bound issuance (`I` inside the signed `C`), transferable bearer redemption QR (Section 9.2) |
 | D2 Pharmacy/session binding of proofs | settled | Not used; relay and first-use races are an accepted risk of the bearer design, mitigated by notification (detection only) |
 | D3 Patient reference | settled | Stable `I = H2(patient_secret)` per patient. Verifiers never receive `I`; issuing doctors do, and colluding issuers can correlate a patient's prescriptions (acknowledged limitation) |
-| D4 Registry-root acceptance | **open** | Latest root only, or a bounded window of recent roots |
+| D4 Registry-root acceptance | settled | A verifier accepts a proof against the current root or any root the registry authority published within the last `Delta` (a deployment parameter, e.g. 24 hours). A doctor removed from the registry therefore stops being accepted at most `Delta` after the new root is published; the patient's app fetches a fresh Merkle path when the root changes. `Delta = 0` (latest root only) is the strict setting. The artifact's verifier takes a single configured root |
 | D5 Patient binding `PB = H6(I, C)` | settled | Removed; superseded by `I` inside `C`; domain 6 retired |
 | D6 What the pharmacy learns (v3) | settled | The full medication list (code, name, dosage, quantity per redemption), bound to the signed `C` through `D` and shown after verification; every redemption dispenses the whole list, so `threshold` counts redemptions of the whole prescription. Drugs that need a different refill limit go on a separate prescription |
 

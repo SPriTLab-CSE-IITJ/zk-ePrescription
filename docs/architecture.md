@@ -71,6 +71,8 @@ node circom/scripts/lib/gen_poseidon2_constants_circom.js > circom/circuits/pose
 | `scripts/demo.sh` | TV-001 end to end in both backends, the pharmacist's view, one attack, one replay |
 | `scripts/pharmacy_verify.js` | Pharmacy-side check (protocol v3): own root and date, proof, medication list against D; prints the list to dispense |
 | `scripts/lib/medication_list.js` | Canonical medication-list encoding and digest D = H7 (spec Section 6.1) |
+| `scripts/lib/redemption_service.js` | Shared redemption service: atomic check-and-insert of nullifiers (one file per N, exclusive create), redemption records for the patient's query |
+| `scripts/lib/nullifier_concurrency.js` | Concurrent same-N submissions (5 x 32 processes), concurrent distinct slots, patient notification |
 | `scripts/lib/pharmacy_cases.js` | Pharmacy-view tests on a real proof of each backend (signed list shown, altered lists rejected) |
 | `bench/run_device.sh` | One-command benchmark of the current machine: platform record, image build, regression, harness, summary, packed result |
 | `bench/run_benchmark.sh` | Benchmark harness v1.4.2 (host side) |

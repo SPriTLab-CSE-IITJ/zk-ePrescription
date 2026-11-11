@@ -59,6 +59,17 @@ cd zk-ePrescription
 bash bench/run_device.sh        # sudo bash bench/run_device.sh if your user cannot run docker
 ```
 
+The same through npm (Docker still does the work):
+
+| Command | Runs |
+|---|---|
+| `npm run artifact:validate` | `bash bench/run_device.sh`: build, full regression, benchmark, summary, packed result |
+| `npm run benchmark` | `bash bench/run_device.sh --skip-tests`: build and benchmark only |
+| `npm test` | `scripts/run.sh test` on the host; needs every tool installed locally, so prefer `docker run --rm zkep test` |
+
+Options are passed after `--`, e.g. `npm run benchmark -- --label my-laptop`.
+Results are written to `results/` (not tracked by git).
+
 `bench/run_device.sh` does everything in one go: records the machine, builds
 the image, runs the full regression (E2), runs the benchmark (E3), prints a
 summary, checks that your compiled circuits are identical to the published
@@ -154,6 +165,7 @@ SUMMARY                                   Circom / Groth16    Noir / UltraHonk
   circuit size (native units)              12648 R1CS          16687 ACIR opcodes
   library tests (Noir)                     7/7
   nullifier store (replays rejected)       6/6 steps as expected
+  nullifier store (32 concurrent same N)   5/5 rounds, one acceptance each
   cross-backend KAT                        100/100 equal
 
 RESULT: ALL REGRESSION TESTS PASSED
@@ -229,8 +241,11 @@ refill slot has exactly one nullifier.
   service, shared by all pharmacies, that checks and stores accepted
   nullifiers atomically. The guarantee is one redemption per slot, at most
   `threshold` per prescription; every redemption dispenses the whole
-  medication list. Neither that service nor patient notification is
-  implemented here (the service is simulated in memory).
+  medication list. The artifact implements that service as a shared file
+  store with atomic check-and-insert (`scripts/lib/redemption_service.js`),
+  tested with 32 processes submitting the same nullifier at once; it also
+  answers the patient's "was my nullifier used?" query. Pushing notifications
+  to the patient is not implemented.
 - A redemption QR is a transferable bearer token for one slot on one date: a
   relative can collect the medicine with it, and a stolen or relayed QR is not
   prevented from being used first (only detectable through notification).

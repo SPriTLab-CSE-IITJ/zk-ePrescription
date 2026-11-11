@@ -5,7 +5,8 @@
 #   [1] Circom / Groth16      scripts/circom_suite.sh
 #   [2] Noir / UltraHonk      scripts/noir_suite.sh
 #   [3] attack vectors        which check rejected each NT vector, per backend
-#   [4] nullifier store       replay of used slots rejected, on both backends' outputs
+#   [4] nullifier store       replays rejected on both backends' outputs; concurrent
+#                             submissions of one N accepted once; patient notification
 #   [5] cross-backend KAT     scripts/kat/run_cross_backend_kat.sh
 #
 # One line per check on screen; full tool output in results/logs/.
@@ -31,7 +32,7 @@ bash "$REPO/scripts/noir_suite.sh"
 step "3/5" "Attack vectors: each one must fail a circuit constraint in both backends"
 node "$REPO/scripts/lib/attacks.js" "$REPO" "$RESULTS" full
 
-step "4/5" "Nullifier store: each refill slot accepted once, replays rejected"
+step "4/5" "Nullifier store: each refill slot accepted once, replays and races rejected"
 if node "$REPO/scripts/lib/nullifier_store.js" "$REPO" "$RESULTS" >"$RESULTS/logs/nullifier_store.log" 2>&1; then
     sed -n 's/^\(circom\|noir\): \([0-9]*\/[0-9]*\) steps as expected$/\1 \2/p' "$RESULTS/logs/nullifier_store.log" \
         | while read -r b r; do ok "nullifier store ($b outputs)" "$r steps as expected"; done
@@ -40,6 +41,15 @@ if node "$REPO/scripts/lib/nullifier_store.js" "$REPO" "$RESULTS" >"$RESULTS/log
 else
     cat "$RESULTS/logs/nullifier_store.log"
     fail "nullifier store" "unexpected accept/reject or backends differ"
+fi
+if CONC="$(node "$REPO/scripts/lib/nullifier_concurrency.js" "$REPO" "$RESULTS" 2>&1)"; then
+    ok "concurrent same-N submissions" "$(echo "$CONC" | sed -n 's/^concurrent same-N submissions: //p')"
+    ok "distinct slots submitted concurrently" "$(echo "$CONC" | sed -n 's/^distinct refill slots submitted concurrently: //p')"
+    ok "patient notification (foreign redemption)" "$(echo "$CONC" | sed -n 's/^patient notification: .*(\(.*\))$/\1/p')"
+    record store_race "$(echo "$CONC" | sed -n 's/^concurrent same-N submissions: \([0-9]*\/[0-9]*\) rounds.*/\1/p')"
+else
+    echo "$CONC"
+    fail "nullifier store concurrency" "a nullifier was accepted twice, or notification failed"
 fi
 
 step "5/5" "Cross-backend equality: JS reference = Circom = Noir"
@@ -61,6 +71,7 @@ ELAPSED=$(( $(date +%s) - START ))
     printf '  %-40s %-19s %s\n' "circuit size (native units)" "$circom_constraints R1CS" "$noir_acir_opcodes ACIR opcodes"
     printf '  %-40s %s\n' "library tests (Noir)" "$noir_common"
     printf '  %-40s %s\n' "nullifier store (replays rejected)" "$store_steps steps as expected"
+    printf '  %-40s %s\n' "nullifier store (32 concurrent same N)" "$store_race rounds, one acceptance each"
     printf '  %-40s %s\n' "cross-backend KAT" "$kat_total equal"
     echo
     if [ "${ZKEP_SKIP_BB:-0}" = "1" ]; then

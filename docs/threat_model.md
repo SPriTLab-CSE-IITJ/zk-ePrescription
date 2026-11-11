@@ -17,10 +17,11 @@ national-health-identity infrastructure itself.
 assumptions; it is not a formal security proof. Within this artifact the ZK
 circuits enforce prescription integrity, registry membership, signature
 validity, the policy checks and correct nullifier derivation
-(`docs/protocol_specification.md`, Section 16). The nullifier store (replay
-rejection), patient notification / redemption accountability and the
-national-health-identity enrolment are external services that are **not**
-implemented here. No claim of anonymity, universal unlinkability or collusion
+(`docs/protocol_specification.md`, Section 16). The redemption service
+(replay rejection) is implemented as a shared file store with atomic
+check-and-insert and tested under concurrent submissions; pushing
+notifications to the patient and the national-health-identity enrolment are
+external services that are **not** implemented here. No claim of anonymity, universal unlinkability or collusion
 resistance is made.
 
 ---
@@ -121,8 +122,11 @@ The threat model assumes:
 Assumptions 6-9 are environmental: the circuits cannot establish them
 (docs/protocol_specification.md, Section 26). The pharmacy-side checks of
 assumptions 7 and 8 are implemented by `scripts/pharmacy_verify.js`; the
-shared atomic service of assumption 6 is simulated in memory, and the
-notification of assumption 9 is not implemented. Which registry roots are acceptable is an open decision (D4).
+shared atomic service of assumption 6 is implemented by
+`scripts/lib/redemption_service.js`, which also answers the patient's query
+whether one of its nullifiers was used; pushing the notification of
+assumption 9 is not implemented. Pharmacies accept the current registry root
+or one published within the last Delta (decision D4).
 
 The ZK circuit does not itself authenticate the national health-identity
 authority.

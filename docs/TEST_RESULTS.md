@@ -27,6 +27,9 @@ values) in `testdata/historical/v1/`.
 | Pharmacy view on an UltraHonk proof | 8/8 as expected |
 | Nullifier store, Circom outputs | 6/6 steps as expected |
 | Nullifier store, Noir outputs | 6/6 steps as expected |
+| Concurrent submissions of one N (5 rounds x 32 processes) | 5/5 rounds, exactly one acceptance |
+| Distinct refill slots submitted concurrently | 3/3 accepted |
+| Patient notification (foreign redemption detected) | 3/3 as expected |
 | Same C, N and D in both backends | 5/5 vectors |
 | Cross-backend canonical | 16/16 equal |
 | Cross-backend doctor1 | 16/16 equal |
@@ -91,11 +94,22 @@ among the public values.
 ## Nullifier store
 
 `scripts/lib/nullifier_store.js` replays the scenario in
-`testdata/kat/canonical_fixture.json` (`nullifier_store_scenario`) against an
-in-memory redemption service, once with the outputs of each backend: slots 0, 1
-and 2 are accepted; slot 0 presented again on the expiry date (TV-004, same
-nullifier) and a second presentation of TV-001 are rejected; a prescription
-from another doctor (TV-005) is accepted.
+`testdata/kat/canonical_fixture.json` (`nullifier_store_scenario`) against the
+redemption service (`scripts/lib/redemption_service.js`: one file per accepted
+nullifier, created with exclusive create, so check and insert are one atomic
+operation), once with the outputs of each backend: slots 0, 1 and 2 are
+accepted; slot 0 presented again on the expiry date (TV-004, same nullifier)
+and a second presentation of TV-001 are rejected; a prescription from another
+doctor (TV-005) is accepted.
+
+`scripts/lib/nullifier_concurrency.js` then releases 32 separate processes at
+the same instant, all submitting the same nullifier, in 5 rounds: exactly one
+is accepted each time. The three refill slots submitted concurrently are all
+accepted. Finally the patient's app, which redeemed slot 0 itself, derives its
+nullifiers from its secret, queries the service and reports slot 1 as a
+redemption it did not make (made with a copied token at another pharmacy);
+slot 2 is unused. A check-then-insert store without exclusive create accepts
+the same nullifier many times in this test.
 
 Each negative vector is a single attempt that must fail. A test passes only if
 witness generation (Circom) or execution (Noir) is rejected by a circuit
@@ -105,7 +119,7 @@ constraint, not by a tool or input error.
 
 The screen shows one line per check; the full output of every tool is in
 `results/logs/` (`circom.log`, `noir.log`, `kat.log`, `nullifier_store.log`,
-`pharmacy_circom.log`, `pharmacy_noir.log`).
+`pharmacy_circom.log`, `pharmacy_noir.log`, `nullifier_concurrency.log`).
 
 The attack table names the check that rejected each vector in each backend:
 
